@@ -116,3 +116,84 @@ body {
     display: none;
   }
 }
+
+/*
+  Liquid glass: used in exactly two places, the Paid celebration's centre panel
+  and the pay page's invoice card. Translucent fill, blur with the -webkit-
+  prefix, a thin light border and a soft sheen. Blobs sit behind for it to refract.
+  Where backdrop-filter is unsupported the fill becomes solid.
+*/
+.glass-dark,
+.glass-light {
+  position: relative;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+.glass-dark {
+  /* Dark tint keeps white text above 4.5:1 even over the brightest blob. */
+  background: rgba(14, 18, 58, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 60px rgba(4, 6, 30, 0.5);
+}
+.glass-light {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(35, 45, 122, 0.06),
+    0 14px 44px rgba(35, 45, 122, 0.16);
+}
+.glass-dark::before,
+.glass-light::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 38%),
+    radial-gradient(120% 60% at 15% -10%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 60%);
+}
+.glass-light::before {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 40%),
+    radial-gradient(120% 60% at 15% -10%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 60%);
+}
+.glass-dark > *,
+.glass-light > * {
+  position: relative;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-dark {
+    background: #1b2260;
+  }
+  .glass-light {
+    background: #ffffff;
+  }
+}
+
+/*
+  The one page-load motion: children rise and fade in one after another.
+  Fill mode is `backwards`, not `both`, so no transform is left behind when it
+  ends (a leftover transform would trap position:fixed children, like the Paid screen).
+*/
+.stagger > * {
+  animation: rise 620ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 90ms; }
+.stagger > *:nth-child(3) { animation-delay: 180ms; }
+.stagger > *:nth-child(4) { animation-delay: 270ms; }
+.stagger > *:nth-child(5) { animation-delay: 360ms; }
+.stagger > *:nth-child(6) { animation-delay: 450ms; }
+.stagger > *:nth-child(n + 7) { animation-delay: 540ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger > * {
+    animation: none;
+  }
+}

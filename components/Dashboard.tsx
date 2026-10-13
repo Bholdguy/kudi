@@ -37,7 +37,7 @@ function SignedInView({ state, onSignOut }: { state: StoredState; onSignOut: () 
           Sign out
         </Button>
       </header>
-      <main className="mx-auto w-full max-w-2xl px-5 pb-20">
+      <main className="stagger mx-auto w-full max-w-2xl px-5 pb-20">
         <Summary
           state={state}
           total={total}

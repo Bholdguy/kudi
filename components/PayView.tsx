@@ -274,7 +274,12 @@ function PayInvoice({ link }: { link: PayLink }) {
   const paid = phase.kind === "paid";
 
   return (
-    <>
+    <div className="stagger">
+      <div className="relative isolate">
+        {/* Blurred indigo and marigold shapes behind the glass card, for it to refract. */}
+        <span className="pointer-events-none absolute -right-10 -top-10 -z-10 h-56 w-56 rounded-full bg-brand/35 blur-3xl" aria-hidden="true" />
+        <span className="pointer-events-none absolute -bottom-12 -left-10 -z-10 h-56 w-56 rounded-full bg-coin/55 blur-3xl" aria-hidden="true" />
+        <div className="glass-light rounded-3xl p-5">
       <p className="text-lg text-muted">Invoice from</p>
       <h1 className="font-display text-4xl font-bold leading-tight tracking-tight" data-testid="pay-from">
         {link.n}
@@ -321,6 +326,8 @@ function PayInvoice({ link }: { link: PayLink }) {
       <p className="mt-3 text-sm text-muted">
         A small network fee, paid in testnet MON, applies when you send.
       </p>
+        </div>
+      </div>
 
       <section className="mt-8" aria-live="polite">
         {paid ? (
@@ -444,6 +451,6 @@ function PayInvoice({ link }: { link: PayLink }) {
       <p className="mt-10 text-xs text-muted" data-testid="pay-details">
         Invoice {link.inv}, created at block {link.b}
       </p>
-    </>
+    </div>
   );
 }

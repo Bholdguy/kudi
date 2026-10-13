@@ -214,7 +214,7 @@ export default function Landing() {
             aria-hidden="true"
           />
           <div className="relative mx-auto grid w-full max-w-5xl gap-8 px-5 pb-14 pt-10 md:grid-cols-[1.3fr_1fr] md:items-center md:pt-16">
-            <div>
+            <div className="stagger">
               <h1 className="font-display text-[2.6rem] font-bold leading-[1.04] tracking-tight text-ink sm:text-6xl">
                 Get paid from anywhere, in real dollars, with your face.
               </h1>

@@ -106,8 +106,14 @@ export default function PaidMoment({
       className="adire-dark on-dark fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-brand-deep px-6 text-center text-white"
       data-testid="paid-moment"
     >
+      {/* Blurred indigo and marigold shapes behind the glass panel, for it to refract. */}
+      <span className="pointer-events-none absolute -left-24 top-[8%] h-72 w-72 rounded-full bg-[#4a5bff]/60 blur-3xl" aria-hidden="true" />
+      <span className="pointer-events-none absolute -right-20 bottom-[6%] h-72 w-72 rounded-full bg-coin/55 blur-3xl" aria-hidden="true" />
+      <span className="pointer-events-none absolute left-[30%] top-[2%] h-40 w-40 rounded-full bg-coin/35 blur-3xl" aria-hidden="true" />
+
       <Confetti />
 
+      <div className="glass-dark relative z-10 flex w-full max-w-sm flex-col items-center rounded-[2rem] px-6 py-8">
       <div className="relative flex h-28 w-28 items-center justify-center">
         <span className="absolute inset-0 rounded-full bg-coin animate-ring" aria-hidden="true" />
         <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-coin text-brand-deep shadow-[0_8px_30px_rgba(244,178,43,0.45)] animate-coin-pop">
@@ -156,6 +162,7 @@ export default function PaidMoment({
       >
         Done
       </button>
+      </div>
     </div>
   );
 }
