@@ -12,7 +12,9 @@ const rpcUrls: readonly string[] =
     ? [primaryRpcUrl, fallbackRpcUrl]
     : [primaryRpcUrl];
 
-const explorerBaseUrl = "https://testnet.monadscan.com";
+const passkeyRpId = process.env.NEXT_PUBLIC_PASSKEY_RP_ID?.trim() || "localhost";
+
+const explorerBaseUrl ="https://testnet.monadscan.com";
 
 export const config = {
   chain: {
@@ -27,6 +29,11 @@ export const config = {
   ausdAddress: "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC" as Address,
   faucetAddress: "0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C" as Address,
   explorerBaseUrl,
+  passkeyRpId,
+  appName: "Kudi",
+  storageKey: "kudi:v1",
+  sessionKey: "kudi:session",
+  displayNameMaxLength: 40,
 } as const;
 
 export function explorerAddressUrl(address: Address): string {
