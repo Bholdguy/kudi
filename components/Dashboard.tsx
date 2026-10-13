@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ClientsSection from "@/components/ClientsSection";
+import InvoicesSection from "@/components/InvoicesSection";
 import CopyButton from "@/components/CopyButton";
 import { config } from "@/lib/config";
 import { shortAddress } from "@/lib/format";
@@ -125,6 +126,7 @@ export default function Dashboard() {
       </section>
 
       <ClientsSection state={state} />
+      <InvoicesSection state={state} />
     </main>
   );
 }

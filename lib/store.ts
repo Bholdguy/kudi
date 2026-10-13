@@ -13,6 +13,7 @@ export type StoredInvoice = {
   amount: string;
   memo: string;
   createdBlock: number;
+  createdAt: number;
   status: "unpaid" | "paid" | "underpaid";
   paidTx: string | null;
   paidAmount: string | null;

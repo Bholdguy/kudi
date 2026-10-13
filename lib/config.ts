@@ -35,6 +35,12 @@ export const config = {
   sessionKey: "kudi:session",
   displayNameMaxLength: 40,
   balanceRefreshMs: 5000,
+  amountFractionDigits: 2,
+  invoiceMaxWholeAmount: 1_000_000,
+  memoMaxLength: 80,
+  linkVersion: "1",
+  invoiceIdPrefix: "inv_",
+  invoiceIdRandomLength: 6,
 } as const;
 
 export function explorerAddressUrl(address: Address): string {

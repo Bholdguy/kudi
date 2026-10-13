@@ -18,6 +18,11 @@ export async function readDecimals(): Promise<number> {
   });
 }
 
+/** The chain's latest block number. A new invoice records it as its starting point. */
+export async function readBlockNumber(): Promise<number> {
+  return Number(await publicClient.getBlockNumber());
+}
+
 let decimalsCache: number | null = null;
 
 /** Reads decimals() once from the contract, then reuses it. */
