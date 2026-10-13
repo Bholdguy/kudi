@@ -48,6 +48,7 @@ export function buildInvoice(args: {
     status: "unpaid",
     paidTx: null,
     paidAmount: null,
+    paidAt: null,
   };
 }
 

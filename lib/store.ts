@@ -1,10 +1,28 @@
 import { config } from "@/lib/config";
 
+/** One incoming AUSD transfer to a client address, as found in the chain's logs. */
+export type StoredTransfer = {
+  block: number;
+  logIndex: number;
+  tx: string;
+  /** AUSD base units. */
+  value: string;
+  /** Block timestamp, unix seconds. */
+  timestamp: number;
+};
+
+/** Transfers found so far for a client, and the last block scanned for them. */
+export type ClientScan = {
+  through: number;
+  transfers: StoredTransfer[];
+};
+
 export type StoredClient = {
   index: number;
   name: string;
   address: string;
   createdAt: number;
+  scan?: ClientScan;
 };
 
 export type StoredInvoice = {
@@ -16,7 +34,10 @@ export type StoredInvoice = {
   createdAt: number;
   status: "unpaid" | "paid" | "underpaid";
   paidTx: string | null;
+  /** Total AUSD received for this invoice so far, in base units. */
   paidAmount: string | null;
+  /** Block timestamp of the latest matched transfer, unix seconds. */
+  paidAt: number | null;
 };
 
 export type StoredState = {
@@ -50,7 +71,12 @@ function parseState(value: unknown): StoredState | null {
     homeAddress,
     accountXpub,
     clients: Array.isArray(value.clients) ? (value.clients as StoredClient[]) : [],
-    invoices: Array.isArray(value.invoices) ? (value.invoices as StoredInvoice[]) : [],
+    invoices: Array.isArray(value.invoices)
+      ? (value.invoices as StoredInvoice[]).map((invoice) => ({
+          ...invoice,
+          paidAt: typeof invoice.paidAt === "number" ? invoice.paidAt : null,
+        }))
+      : [],
   };
 }
 

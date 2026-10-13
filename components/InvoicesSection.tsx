@@ -2,13 +2,18 @@
 
 import { useMemo, useState } from "react";
 import CopyButton from "@/components/CopyButton";
+import PaidMoment from "@/components/PaidMoment";
 import { formatAmount, parseAmount, type ParsedAmount } from "@/lib/amount";
 import { getDecimals, readBlockNumber } from "@/lib/ausd";
 import { clientAddress } from "@/lib/clients";
 import { config, explorerTxUrl } from "@/lib/config";
 import { buildInvoice, buildPayLink, generateInvoiceId } from "@/lib/invoice";
+import { resetScanMark } from "@/lib/receipts";
+import { extraAmount } from "@/lib/reconcile";
+import { rewindThrough } from "@/lib/scanPlan";
 import { loadState, saveState, type StoredInvoice, type StoredState } from "@/lib/store";
 import { useDecimals } from "@/lib/useDecimals";
+import { usePaymentWatcher } from "@/lib/usePaymentWatcher";
 
 const primaryButton =
   "min-h-11 rounded-lg bg-black px-4 text-base font-medium text-white disabled:opacity-60";
@@ -62,6 +67,7 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const decimals = useDecimals();
+  const watcher = usePaymentWatcher();
 
   const clientsByIndex = useMemo(
     () =>
@@ -113,7 +119,14 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
         nowSeconds: Math.floor(Date.now() / 1000),
       });
       const current = loadState() ?? state;
-      saveState({ ...current, invoices: [...current.invoices, invoice] });
+      // The new invoice's block must be scanned, so an already-scanned mark moves back before it.
+      const clients = current.clients.map((client) =>
+        client.index === selected.client.index && client.scan
+          ? { ...client, scan: { ...client.scan, through: rewindThrough(client.scan.through, createdBlock) } }
+          : client,
+      );
+      saveState({ ...current, clients, invoices: [...current.invoices, invoice] });
+      resetScanMark(selected.client.index);
       setAmountInput("");
       setMemoInput("");
     } catch {
@@ -142,6 +155,16 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
   return (
     <section className="mt-8">
       <h2 className="text-lg font-semibold">Invoices</h2>
+      {watcher.checking && (
+        <p role="status" className="mt-1 text-sm text-zinc-700">
+          Checking for payments...
+        </p>
+      )}
+      {watcher.failed && (
+        <p role="status" className="mt-1 text-sm text-amber-900">
+          Network is busy, retrying...
+        </p>
+      )}
 
       {!hasName && (
         <p className="mt-3 text-zinc-700">
@@ -235,8 +258,15 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
                         : `${formatAmount(BigInt(invoice.amount), decimals)} AUSD`}
                     </p>
                     <p className="text-sm font-medium" data-testid="invoice-status">
-                      {STATUS_LABEL[invoice.status]}
+                      {invoice.status === "underpaid" && decimals !== null && invoice.paidAmount !== null
+                        ? `Underpaid: received ${formatAmount(BigInt(invoice.paidAmount), decimals)} of ${formatAmount(BigInt(invoice.amount), decimals)} AUSD`
+                        : STATUS_LABEL[invoice.status]}
                     </p>
+                    {decimals !== null && extraAmount(invoice) > 0n && (
+                      <p className="text-sm" data-testid="invoice-extra">
+                        +{formatAmount(extraAmount(invoice), decimals)} AUSD extra
+                      </p>
+                    )}
                   </div>
                 </div>
                 {invoice.paidTx !== null && (
@@ -259,6 +289,10 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
             );
           })}
         </ul>
+      )}
+
+      {watcher.moments.length > 0 && (
+        <PaidMoment moment={watcher.moments[0]} onDismiss={watcher.dismissFirst} />
       )}
     </section>
   );

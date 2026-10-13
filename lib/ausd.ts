@@ -25,6 +25,11 @@ export async function readBlockNumber(): Promise<number> {
 
 let decimalsCache: number | null = null;
 
+/** The decimals if they have already been read, so a screen can show amounts on its first frame. */
+export function peekDecimals(): number | null {
+  return decimalsCache;
+}
+
 /** Reads decimals() once from the contract, then reuses it. */
 export async function getDecimals(): Promise<number> {
   if (decimalsCache === null) decimalsCache = await readDecimals();

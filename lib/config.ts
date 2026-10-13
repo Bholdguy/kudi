@@ -44,6 +44,10 @@ export const config = {
   receiptPollMs: 500,
   receiptTimeoutMs: 60_000,
   monFaucetUrl: "https://faucet.monad.xyz",
+  logMaxBlocks: 100,
+  scanConcurrency: 6,
+  scanMaxWindowsPerPass: 200,
+  scanPollMs: 1500,
 } as const;
 
 export function explorerAddressUrl(address: Address): string {

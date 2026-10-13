@@ -3,7 +3,7 @@
 Passkey-based freelancer invoicing: one passkey derives a receiving address per client; clients pay AUSD on Monad testnet. PRD.md is the single source of truth.
 
 ## Current phase
-Phases 0 to 4 done (passkey account; clients; invoices; pay page). Next: Phase 5, live receipt (KUDI-14, 15). Before Phase 7: create the public GitHub repo (bholdguy) and push. Every phase ends with a Vercel production deploy (`npx vercel deploy --prod --yes`).
+Phases 0 to 5 done (passkey account; clients; invoices; pay page; live receipt). Next: Phase 6, hardening (E1 to E18, fallback RPC test, copy review, mobile layout). Before Phase 7: create the public GitHub repo (bholdguy) and push. Every phase ends with a Vercel production deploy (`npx vercel deploy --prod --yes`).
 
 ## Stack
 Next.js App Router, TypeScript, Tailwind, viem, `@category-labs/mera`, `@scure/bip32`, `@scure/bip39`, vitest. No wagmi (see decisions log).
@@ -58,3 +58,9 @@ One phase at a time. Before coding a phase: interpretation, open questions, assu
 - Gas: viem's `estimateContractGas` with no padding (NFR-09). Read-only check: 72,930 gas for a 50 AUSD transfer, about 0.0074 MON at 102 gwei. The page was seen to send exactly that figure.
 - Fallback RPC is now set: `NEXT_PUBLIC_RPC_URL_FALLBACK=https://rpc-testnet.monadinfra.com` (Monad Foundation, 20 rps per the Monad docs) on Vercel production and in `.env.example`. Official MON faucet: https://faucet.monad.xyz.
 - The agent never sends or confirms a payment. Real payments are made by the owner from MetaMask. Wallet-less UI states were checked with a throwaway test provider that rejects every send; it is not part of the shipped code.
+- 2026-10-13 Phase 5: both RPCs reject `eth_getLogs` ranges over 101 blocks inclusive (measured: 102 fails; error says "limited to a 100 range"). `lib/scanPlan.ts` splits any gap into windows of `config.logMaxBlocks` (100); the same planner serves the first catch-up and every live poll, so a sleeping phone or hidden tab is covered by more windows, never one big request. Capped at 200 windows per pass; a long gap continues on the next pass. Measured: 123 windows (12,215 blocks, about 1.4 h) in 11.8 s.
+- Matching (`lib/reconcile.ts`) recomputes statuses from scratch per client from cached transfers, so it is idempotent: transfers in (block, logIndex) order, only counted at or after the invoice's block; an exact completion of the oldest open invoice wins; otherwise the oldest open invoice takes it, short payments add up (owner choice: 30 then 20 settles 50), extra over the amount shows as "+X AUSD extra"; a transfer with no open invoice matches nothing.
+- Stored shape gained (beyond the PRD): per client `scan: {through, transfers}` (last scanned block and transfers found) and per invoice `paidAt` (block timestamp). Scan progress between passes lives in memory and is saved when something changes or every 600 blocks; creating an invoice rewinds the saved mark before its block.
+- Full-screen "Paid" appears only for payments that land after the first full pass reached the head; an invoice found paid during catch-up or on reload just shows Paid in the list (E17). Elapsed time is block timestamp minus `createdAt`, clamped at zero. The watcher makes no requests while the tab is hidden.
+- Faucet drips to a client address after an invoice exists count as ordinary transfers (E12): the invoice becomes Paid with a large extra. Fund test accounts before creating invoices.
+- Verified live (read-only): the owner's real payment (tx 0x7ec422f8...6b01e, block 70711401, to the real Acme address) is found by the shipped scan code and matches an invoice. Wallet and chain logic otherwise tested with throwaway page hooks that are not shipped.
