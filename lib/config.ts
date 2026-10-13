@@ -34,6 +34,7 @@ export const config = {
   storageKey: "kudi:v1",
   sessionKey: "kudi:session",
   displayNameMaxLength: 40,
+  balanceRefreshMs: 5000,
 } as const;
 
 export function explorerAddressUrl(address: Address): string {

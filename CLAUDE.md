@@ -3,7 +3,7 @@
 Passkey-based freelancer invoicing: one passkey derives a receiving address per client; clients pay AUSD on Monad testnet. PRD.md is the single source of truth.
 
 ## Current phase
-Phases 0 and 1 done (passkey account, KUDI-01 to 04). Next: Phase 2, clients (KUDI-05, 06).
+Phases 0 to 2 done (passkey account; clients with live balances). Next: Phase 3, invoices (KUDI-07 to 09). Before Phase 7: create the public GitHub repo (bholdguy) and push. Every phase ends with a Vercel production deploy (`npx vercel deploy --prod --yes`).
 
 ## Stack
 Next.js App Router, TypeScript, Tailwind, viem, `@category-labs/mera`, `@scure/bip32`, `@scure/bip39`, vitest. Later: wagmi (pay page only).
@@ -45,3 +45,8 @@ One phase at a time. Before coding a phase: interpretation, open questions, assu
 - Signed-in state is a `sessionStorage` flag: closing the tab means signing in again. Account data stays in localStorage. In-memory fallback covers private windows (E16).
 - Landing: if `kudi:v1` holds a credential, "Sign in" is primary and "Create a new account" is a small link.
 - passkey `rpId` comes from `NEXT_PUBLIC_PASSKEY_RP_ID` (default `localhost`); it is inlined at build time, so set it before the production build.
+- 2026-10-13 KUDI-17 (signed invoices) DROPPED by the owner. Reason: signing needs a client-address private key, and with `accountXpub` stored in the browser, one exposed child key reveals the whole account's keys. No invoice signing anywhere; the `sig` link param is unused.
+- 2026-10-13 Phase 2: client addresses come from `addressAt(accountXpub, index)` with no passkey prompt; the UI shows the derived address, never the stored copy. Indexes start at 1 (0 is home). Duplicate client names allowed. Total row sums client addresses only.
+- Balances: one batched (multicall3) read every 5 s, paused while the tab is hidden; last values kept on failure. Multicall3 at viem's address has code on Monad testnet (checked via eth_getCode). Amounts display with 2 decimals, truncated (`lib/amount.ts`).
+- tsconfig target raised to ES2020 (BigInt literals, NFR-08).
+- AUSD faucet: proxy 0xd236...ee6C, implementation 0xba804DF5c476E8EaeF87BF8085F295300ccE2a49 (verified, AgoraFaucet). `requestFunds(address _receiver)` sends 10,000 AUSD to any receiver; receiver cap 100,000 AUSD; `maxDripFrequency` 60 s with a single global `lastDripTimestamp` (read as a shared cooldown, source not read). Relevant to KUDI-16.

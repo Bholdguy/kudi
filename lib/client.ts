@@ -3,6 +3,7 @@ import { config } from "@/lib/config";
 
 export const publicClient = createPublicClient({
   chain: config.chain,
+  batch: { multicall: true },
   transport: fallback(
     config.rpcUrls.map((url) =>
       http(url, {

@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import ClientsSection from "@/components/ClientsSection";
+import CopyButton from "@/components/CopyButton";
 import { config } from "@/lib/config";
 import { shortAddress } from "@/lib/format";
 import { saveState, setSignedIn } from "@/lib/store";
@@ -13,8 +15,6 @@ const secondaryButton =
   "min-h-11 rounded-lg border border-zinc-400 px-4 text-base font-medium text-zinc-900";
 const linkButton = "min-h-11 px-2 text-sm text-zinc-700 underline";
 
-type CopyState = "idle" | "copied" | "failed";
-
 export default function Dashboard() {
   const router = useRouter();
   const state = useStoredState();
@@ -22,7 +22,6 @@ export default function Dashboard() {
   const hydrated = useHydrated();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
-  const [copy, setCopy] = useState<CopyState>("idle");
 
   const allowed = state !== null && signedIn;
 
@@ -48,16 +47,6 @@ export default function Dashboard() {
     const next = { ...state, displayName: trimmedName };
     saveState(next);
     setEditingName(false);
-  }
-
-  async function copyAddress() {
-    if (!state) return;
-    try {
-      await navigator.clipboard.writeText(state.homeAddress);
-      setCopy("copied");
-    } catch {
-      setCopy("failed");
-    }
   }
 
   function signOut() {
@@ -128,14 +117,14 @@ export default function Dashboard() {
         <p className="mt-1 font-mono text-lg" data-testid="home-address" title={state.homeAddress}>
           {shortAddress(state.homeAddress)}
         </p>
-        <button type="button" className={`${secondaryButton} mt-3`} onClick={copyAddress}>
-          {copy === "copied"
-            ? "Copied"
-            : copy === "failed"
-              ? "Could not copy. Try again."
-              : "Copy address"}
-        </button>
+        <CopyButton
+          text={state.homeAddress}
+          label="Copy address"
+          className={`${secondaryButton} mt-3`}
+        />
       </section>
+
+      <ClientsSection state={state} />
     </main>
   );
 }
