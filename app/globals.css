@@ -1,16 +1,118 @@
 @import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque/wght.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+  Kudi design tokens. Adire indigo is the trust colour; marigold is the coin
+  and is kept for the brand mark and the celebration so it stays special.
+*/
+@theme {
+  --color-brand: #232d7a;
+  --color-brand-deep: #141a4a;
+  --color-brand-soft: #e8eaf7;
+  --color-coin: #f4b22b;
+  --color-paper: #f7f6fb;
+  --color-surface: #ffffff;
+  --color-ink: #1b2158;
+  --color-muted: #4a5085;
+  --color-line: #d9dbee;
+  --color-palm: #0d7a55;
+  --color-palm-soft: #e1f3ea;
+  --color-clay: #b3261e;
+  --color-clay-soft: #fbe9e7;
+  --color-amber-ink: #7a4f00;
+  --color-amber-soft: #fff0cf;
+
+  --font-display: "Bricolage Grotesque Variable", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  --animate-coin-pop: coin-pop 700ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-rise: rise 500ms ease-out both;
+  --animate-confetti: confetti 2.6s ease-in forwards;
+  --animate-draw: draw 520ms 120ms ease-out forwards;
+  --animate-ring: ring 900ms ease-out both;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+html {
+  color-scheme: light;
+  background: var(--color-paper);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-coin);
+  color: var(--color-brand-deep);
+}
+
+/* Visible keyboard focus everywhere; on the dark celebration it turns marigold. */
+:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+.on-dark :focus-visible {
+  outline-color: var(--color-coin);
+}
+
+/* Adire (indigo resist-dye) pattern, drawn inline so nothing loads from elsewhere. */
+.adire-dark {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.09' stroke-width='1.2'%3E%3Cpath d='M18 4 32 18 18 32 4 18Z'/%3E%3Ccircle cx='18' cy='18' r='3.2'/%3E%3C/g%3E%3Cg fill='%23fff' fill-opacity='.09'%3E%3Ccircle cx='0' cy='0' r='2'/%3E%3Ccircle cx='36' cy='0' r='2'/%3E%3Ccircle cx='0' cy='36' r='2'/%3E%3Ccircle cx='36' cy='36' r='2'/%3E%3C/g%3E%3C/svg%3E");
+}
+.adire-light {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg fill='none' stroke='%23232d7a' stroke-opacity='.07' stroke-width='1.2'%3E%3Cpath d='M18 4 32 18 18 32 4 18Z'/%3E%3Ccircle cx='18' cy='18' r='3.2'/%3E%3C/g%3E%3Cg fill='%23232d7a' fill-opacity='.07'%3E%3Ccircle cx='0' cy='0' r='2'/%3E%3Ccircle cx='36' cy='0' r='2'/%3E%3Ccircle cx='0' cy='36' r='2'/%3E%3Ccircle cx='36' cy='36' r='2'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-line) 25%, #eceefa 50%, var(--color-line) 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes coin-pop {
+  0% { transform: scale(0.2) rotate(-25deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes rise {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes confetti {
+  0% { transform: translate3d(0, -12vh, 0) rotate(0); opacity: 1; }
+  100% { transform: translate3d(var(--drift, 0px), 112vh, 0) rotate(var(--spin, 540deg)); opacity: 0.9; }
+}
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes ring {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* People who ask for less motion get the finished state, not the animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .confetti-piece {
+    display: none;
+  }
 }

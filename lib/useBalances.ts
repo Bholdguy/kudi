@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { getDecimals, readBalances } from "@/lib/ausd";
 import { config } from "@/lib/config";
+import { nextFailureCount, showBusyMessage } from "@/lib/retry";
 
 export type BalancesState = {
   decimals: number | null;
@@ -28,6 +29,7 @@ export function useBalances(addresses: readonly string[]): BalancesState {
     const list = key.split(",");
     let cancelled = false;
     let inFlight = false;
+    let failures = 0;
 
     async function refresh() {
       if (inFlight || document.hidden) return;
@@ -43,9 +45,11 @@ export function useBalances(addresses: readonly string[]): BalancesState {
           ...previous,
           ...Object.fromEntries(list.map((address, i) => [address, values[i]])),
         }));
+        failures = nextFailureCount(failures, true);
         setFailed(false);
       } catch {
-        if (!cancelled) setFailed(true);
+        failures = nextFailureCount(failures, false);
+        if (!cancelled) setFailed(showBusyMessage(failures));
       } finally {
         inFlight = false;
       }

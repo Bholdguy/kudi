@@ -48,6 +48,7 @@ export const config = {
   scanConcurrency: 6,
   scanMaxWindowsPerPass: 200,
   scanPollMs: 1500,
+  errorGraceFailures: 2,
 } as const;
 
 export function explorerAddressUrl(address: Address): string {

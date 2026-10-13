@@ -1,120 +1,154 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import CopyButton from "@/components/CopyButton";
+import { Button, EmptyState, Field, Skeleton, buttonClass, inputClass } from "@/components/ui";
 import { formatAmount } from "@/lib/amount";
-import { buildClient, clientAddress, validateClientName } from "@/lib/clients";
+import { buildClient, validateClientName } from "@/lib/clients";
 import { config } from "@/lib/config";
 import { shortAddress } from "@/lib/format";
-import { loadState, saveState, type StoredState } from "@/lib/store";
-import { useBalances } from "@/lib/useBalances";
+import { loadState, saveState, type StoredClient, type StoredState } from "@/lib/store";
+import type { BalancesState } from "@/lib/useBalances";
 
-const primaryButton =
-  "min-h-11 rounded-lg bg-black px-4 text-base font-medium text-white disabled:opacity-60";
-const copyButton = "min-h-11 px-2 text-sm text-zinc-700 underline";
+export type ClientRow = { client: StoredClient; address: string };
 
-export default function ClientsSection({ state }: { state: StoredState }) {
-  const [nameInput, setNameInput] = useState("");
-
-  const rows = useMemo(
-    () =>
-      state.clients.map((client) => ({
-        client,
-        address: clientAddress(state.accountXpub, client),
-      })),
-    [state.clients, state.accountXpub],
+function UsersIcon() {
+  return (
+    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="9" cy="8.5" r="3.3" stroke="currentColor" strokeWidth="2" />
+      <path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M16.5 6.2a3 3 0 0 1 0 5.6M18.5 14.6c1.4.7 2.2 2 2.5 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
-  const { decimals, balances, failed } = useBalances(rows.map((row) => row.address));
+}
 
-  const validName = validateClientName(nameInput);
+export default function ClientsSection({
+  state,
+  rows,
+  balanceState,
+}: {
+  state: StoredState;
+  rows: ClientRow[];
+  balanceState: BalancesState;
+}) {
+  const [nameInput, setNameInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  const { decimals, balances, failed } = balanceState;
+
+  function check(raw: string): string | null {
+    if (validateClientName(raw) !== null) return null;
+    return raw.trim().length === 0
+      ? "Enter a name for this client."
+      : `Keep the name to ${config.displayNameMaxLength} characters or fewer.`;
+  }
 
   function addClient(event: React.FormEvent) {
     event.preventDefault();
-    if (validName === null) return;
+    const problem = check(nameInput);
+    setError(problem);
+    const name = validateClientName(nameInput);
+    if (problem !== null || name === null) return;
     // Read the latest saved list so a fast double tap cannot reuse an index.
     const current = loadState() ?? state;
     const client = buildClient(
       current.accountXpub,
       current.clients,
-      validName,
+      name,
       Math.floor(Date.now() / 1000),
     );
     saveState({ ...current, clients: [...current.clients, client] });
     setNameInput("");
+    setTouched(false);
   }
 
-  const allKnown = rows.length > 0 && rows.every((row) => balances[row.address] !== undefined);
-  const total = allKnown ? rows.reduce((sum, row) => sum + balances[row.address], 0n) : null;
-
-  function balanceText(address: string): string {
+  function balanceNode(address: string) {
     const value = balances[address];
-    return value === undefined || decimals === null
-      ? "Loading..."
-      : `${formatAmount(value, decimals)} AUSD`;
+    if (value === undefined || decimals === null) {
+      return failed ? (
+        <span className="text-sm text-amber-ink">Retrying...</span>
+      ) : (
+        <Skeleton className="h-6 w-24" />
+      );
+    }
+    return (
+      <span className="font-display text-xl font-semibold tabular-nums">
+        {formatAmount(value, decimals)} <span className="text-base text-muted">AUSD</span>
+      </span>
+    );
   }
 
   return (
-    <section className="mt-8">
-      <h2 className="text-lg font-semibold">Clients</h2>
+    <section className="mt-12" aria-labelledby="clients-heading">
+      <h2 id="clients-heading" className="font-display text-2xl font-bold tracking-tight">
+        Clients
+      </h2>
 
-      <form onSubmit={addClient} className="mt-3 flex flex-col gap-3">
-        <label htmlFor="client-name" className="text-base font-medium">
-          Client name
-        </label>
-        <div className="flex gap-3">
-          <input
-            id="client-name"
-            type="text"
-            value={nameInput}
-            maxLength={config.displayNameMaxLength}
-            onChange={(e) => setNameInput(e.target.value)}
-            className="min-h-11 min-w-0 flex-1 rounded-lg border border-zinc-400 px-3 text-base"
-          />
-          <button type="submit" className={primaryButton} disabled={validName === null}>
-            Add client
-          </button>
+      {rows.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState icon={<UsersIcon />} title="No clients yet">
+            Add your first client to get a payment address just for them. You always know who paid.
+          </EmptyState>
         </div>
-      </form>
+      ) : (
+        <ul className="mt-4 divide-y divide-line border-y border-line">
+          {rows.map(({ client, address }) => (
+            <li key={client.index} className="flex items-start justify-between gap-4 py-4">
+              <div className="min-w-0">
+                <p className="truncate text-lg font-semibold">{client.name}</p>
+                <p className="text-sm tabular-nums text-muted" title={address}>
+                  {shortAddress(address)}
+                </p>
+                <CopyButton
+                  text={address}
+                  label="Copy address"
+                  className={buttonClass("quiet", "!px-0")}
+                />
+              </div>
+              <div className="shrink-0 text-right" data-testid={`balance-${client.index}`}>
+                <p className="text-sm text-muted">Received</p>
+                {balanceNode(address)}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      {failed && (
-        <p role="status" className="mt-4 text-sm text-amber-900">
+      {failed && rows.length > 0 && (
+        <p role="status" className="mt-3 text-sm font-medium text-amber-ink">
           Network is busy, retrying...
         </p>
       )}
 
-      {rows.length === 0 ? (
-        <p className="mt-6 text-zinc-700">
-          No clients yet. Add one to get a payment address just for them.
-        </p>
-      ) : (
-        <>
-          <p className="mt-6 text-sm text-zinc-700">Received, in dollars (AUSD)</p>
-          <ul className="mt-2 divide-y divide-zinc-300 rounded-lg border border-zinc-300">
-            {rows.map(({ client, address }) => (
-              <li key={client.index} className="flex items-start justify-between gap-3 p-4">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{client.name}</p>
-                  <p className="font-mono text-sm text-zinc-700" title={address}>
-                    {shortAddress(address)}
-                  </p>
-                  <CopyButton text={address} label="Copy address" className={copyButton} />
-                </div>
-                <p className="shrink-0 font-mono text-base" data-testid={`balance-${client.index}`}>
-                  {balanceText(address)}
-                </p>
-              </li>
-            ))}
-            <li className="flex items-center justify-between gap-3 bg-zinc-50 p-4 font-semibold">
-              <span>Total</span>
-              <span className="font-mono" data-testid="balance-total">
-                {total === null || decimals === null
-                  ? "Loading..."
-                  : `${formatAmount(total, decimals)} AUSD`}
-              </span>
-            </li>
-          </ul>
-        </>
-      )}
+      <form onSubmit={addClient} className="mt-6 flex flex-col gap-3" noValidate>
+        <Field
+          id="client-name"
+          label="Client name"
+          hint="Only you see this. A company or a person works."
+          error={error}
+        >
+          {(fieldProps) => (
+            <div className="flex gap-3">
+              <input
+                {...fieldProps}
+                type="text"
+                value={nameInput}
+                maxLength={config.displayNameMaxLength}
+                onChange={(e) => {
+                  setNameInput(e.target.value);
+                  setTouched(true);
+                  if (error) setError(null);
+                }}
+                onBlur={() => {
+                  if (touched) setError(check(nameInput));
+                }}
+                className={`${inputClass} min-w-0 flex-1 ${error ? "border-clay" : "border-line"}`}
+              />
+              <Button type="submit">Add client</Button>
+            </div>
+          )}
+        </Field>
+      </form>
     </section>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { config } from "@/lib/config";
 import { scanPass, type PaidMoment } from "@/lib/receipts";
+import { nextFailureCount, showBusyMessage } from "@/lib/retry";
 
 export type PaymentWatcher = {
   /** True until the first full pass has reached the chain's latest block. */
@@ -29,6 +30,7 @@ export function usePaymentWatcher(): PaymentWatcher {
   useEffect(() => {
     let cancelled = false;
     let caughtUp = false;
+    let failures = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     function pause(ms: number): Promise<void> {
@@ -46,10 +48,12 @@ export function usePaymentWatcher(): PaymentWatcher {
             if (outcome.moments.length > 0) setMoments((previous) => [...previous, ...outcome.moments]);
             if (outcome.reachedHead) caughtUp = true;
             setChecking(!caughtUp);
+            failures = nextFailureCount(failures, true);
             setFailed(false);
           } catch {
             if (cancelled) return;
-            setFailed(true);
+            failures = nextFailureCount(failures, false);
+            setFailed(showBusyMessage(failures));
           }
         }
         await pause(config.scanPollMs);

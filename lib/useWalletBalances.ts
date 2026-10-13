@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { readBalances, readNativeBalance } from "@/lib/ausd";
 import { config } from "@/lib/config";
+import { nextFailureCount, showBusyMessage } from "@/lib/retry";
 
 export type WalletBalances = {
   ausd: bigint | null;
@@ -21,6 +22,7 @@ export function useWalletBalances(account: Address | null): WalletBalances {
     if (account === null) return;
     let cancelled = false;
     let inFlight = false;
+    let failures = 0;
 
     async function refresh(address: Address) {
       if (inFlight || document.hidden) return;
@@ -29,9 +31,11 @@ export function useWalletBalances(account: Address | null): WalletBalances {
         const [[ausd], mon] = await Promise.all([readBalances([address]), readNativeBalance(address)]);
         if (cancelled) return;
         setState({ account: address, ausd, mon });
+        failures = nextFailureCount(failures, true);
         setFailed(false);
       } catch {
-        if (!cancelled) setFailed(true);
+        failures = nextFailureCount(failures, false);
+        if (!cancelled) setFailed(showBusyMessage(failures));
       } finally {
         inFlight = false;
       }

@@ -3,8 +3,10 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Address, Hash } from "viem";
+import { Logo } from "@/components/BrandMark";
+import { AlertIcon, Button, CheckIcon, Skeleton, Spinner } from "@/components/ui";
 import { formatAmount } from "@/lib/amount";
-import { config, explorerTxUrl } from "@/lib/config";
+import { config, explorerAddressUrl, explorerTxUrl } from "@/lib/config";
 import { shortAddress } from "@/lib/format";
 import { parsePayLink, type PayLink } from "@/lib/invoice";
 import { checkPayment } from "@/lib/payment";
@@ -51,13 +53,22 @@ const FAILURE_MESSAGE: Record<FailureReason, string> = {
   other: "Something went wrong. Nothing was sent. Try again.",
 };
 
-const buttonClass =
-  "min-h-11 w-full rounded-lg bg-black px-4 text-base font-medium text-white disabled:opacity-60";
-const linkClass = "inline-flex min-h-11 items-center text-sm underline";
+const linkClass = "inline-flex min-h-11 items-center text-base font-semibold text-brand underline decoration-brand/40 underline-offset-4 hover:decoration-brand";
 
 function subscribeProvider(onChange: () => void) {
   window.addEventListener("ethereum#initialized", onChange);
   return () => window.removeEventListener("ethereum#initialized", onChange);
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-dvh">
+      <header className="mx-auto w-full max-w-lg px-5 pt-5">
+        <Logo size={30} />
+      </header>
+      <main className="mx-auto w-full max-w-lg px-5 pb-16 pt-8">{children}</main>
+    </div>
+  );
 }
 
 export default function PayView() {
@@ -66,15 +77,22 @@ export default function PayView() {
 
   if (!parsed.ok) {
     return (
-      <main className="mx-auto w-full max-w-md px-4 py-10">
-        <h1 className="text-2xl font-semibold">Kudi</h1>
-        <p role="alert" className="mt-6 text-lg">
-          This invoice link is broken. Ask for a new one.
-        </p>
-      </main>
+      <Shell>
+        <div className="flex items-start gap-3 rounded-2xl bg-clay-soft p-5" role="alert">
+          <AlertIcon className="mt-1 h-5 w-5 shrink-0 text-clay" />
+          <div>
+            <h1 className="font-display text-2xl font-bold text-clay">This invoice link is broken.</h1>
+            <p className="mt-1 text-lg">Ask for a new one.</p>
+          </div>
+        </div>
+      </Shell>
     );
   }
-  return <PayInvoice link={parsed.link} />;
+  return (
+    <Shell>
+      <PayInvoice link={parsed.link} />
+    </Shell>
+  );
 }
 
 function PayInvoice({ link }: { link: PayLink }) {
@@ -120,7 +138,8 @@ function PayInvoice({ link }: { link: PayLink }) {
     amount: link.amt,
   });
 
-  const amountText = decimals === null ? null : `${formatAmount(link.amt, decimals)} AUSD`;
+  const amountOnly = decimals === null ? null : formatAmount(link.amt, decimals);
+  const amountText = amountOnly === null ? null : `${amountOnly} AUSD`;
 
   async function runExclusive(task: () => Promise<void>) {
     if (busy.current) return;
@@ -140,6 +159,17 @@ function PayInvoice({ link }: { link: PayLink }) {
     setPhase({ kind: "idle" });
   }
 
+  function connectionFailure(error: unknown): Phase {
+    return {
+      kind: "failed",
+      reason: isUserRejection(error)
+        ? "connect_rejected"
+        : isRequestAlreadyPending(error)
+          ? "request_pending"
+          : "connect_failed",
+    };
+  }
+
   function connectAndSwitch() {
     if (provider === null) return;
     void runExclusive(async () => {
@@ -151,14 +181,7 @@ function PayInvoice({ link }: { link: PayLink }) {
         if (id !== config.chain.id) await switchNetwork();
         else setPhase({ kind: "idle" });
       } catch (error) {
-        setPhase({
-          kind: "failed",
-          reason: isUserRejection(error)
-            ? "connect_rejected"
-            : isRequestAlreadyPending(error)
-              ? "request_pending"
-              : "connect_failed",
-        });
+        setPhase(connectionFailure(error));
       }
     });
   }
@@ -168,14 +191,7 @@ function PayInvoice({ link }: { link: PayLink }) {
       try {
         await switchNetwork();
       } catch (error) {
-        setPhase({
-          kind: "failed",
-          reason: isUserRejection(error)
-            ? "connect_rejected"
-            : isRequestAlreadyPending(error)
-              ? "request_pending"
-              : "connect_failed",
-        });
+        setPhase(connectionFailure(error));
       }
     });
   }
@@ -217,15 +233,15 @@ function PayInvoice({ link }: { link: PayLink }) {
   const retryLabel =
     phase.kind === "failed" && ["rejected", "reverted", "other"].includes(phase.reason);
 
-  let button: { label: string; disabled: boolean; kind: ButtonKind } | null = null;
+  let button: { label: string; disabled: boolean; kind: ButtonKind; working?: boolean } | null = null;
   if (phase.kind === "paid" || phase.kind === "unconfirmed" || check.action === "no_wallet") {
     button = null;
   } else if (phase.kind === "connecting") {
-    button = { label: "Connecting...", disabled: true, kind: "connect" };
+    button = { label: "Connecting...", disabled: true, kind: "connect", working: true };
   } else if (phase.kind === "switching") {
-    button = { label: "Switching network...", disabled: true, kind: "switch" };
+    button = { label: "Switching network...", disabled: true, kind: "switch", working: true };
   } else if (sending) {
-    button = { label: "Sending...", disabled: true, kind: "pay" };
+    button = { label: "Sending...", disabled: true, kind: "pay", working: true };
   } else if (check.action === "not_connected") {
     button = {
       label: amountText ? `Connect wallet to pay ${amountText}` : "Connect wallet to pay",
@@ -235,7 +251,7 @@ function PayInvoice({ link }: { link: PayLink }) {
   } else if (check.action === "wrong_chain") {
     button = { label: `Switch to ${config.chain.name}`, disabled: false, kind: "switch" };
   } else if (check.action === "checking") {
-    button = { label: "Checking balances...", disabled: true, kind: "pay" };
+    button = { label: "Checking balances...", disabled: true, kind: "pay", working: true };
   } else if (check.action === "low_ausd") {
     button = { label: "Not enough AUSD", disabled: true, kind: "pay" };
   } else if (check.action === "low_mon") {
@@ -247,7 +263,6 @@ function PayInvoice({ link }: { link: PayLink }) {
       kind: "pay",
     };
   }
-
   const activeButton = button;
 
   function onButtonClick(kind: ButtonKind) {
@@ -256,47 +271,84 @@ function PayInvoice({ link }: { link: PayLink }) {
     else pay();
   }
 
+  const paid = phase.kind === "paid";
+
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-10">
-      <h1 className="text-2xl font-semibold">Kudi</h1>
-      <p className="mt-6 text-zinc-700">Invoice from</p>
-      <p className="text-xl font-semibold" data-testid="pay-from">
+    <>
+      <p className="text-lg text-muted">Invoice from</p>
+      <h1 className="font-display text-4xl font-bold leading-tight tracking-tight" data-testid="pay-from">
         {link.n}
-      </p>
+      </h1>
       {link.c !== "" && (
-        <p className="mt-1 text-zinc-700" data-testid="pay-client">
+        <p className="mt-1 text-lg text-muted" data-testid="pay-client">
           For {link.c}
         </p>
       )}
 
-      <p className="mt-6 text-sm text-zinc-700">Amount</p>
-      <p className="font-mono text-3xl" data-testid="pay-amount">
-        {amountText ?? "Loading..."}
-      </p>
-
-      {link.m !== "" && (
-        <>
-          <p className="mt-6 text-sm text-zinc-700">Note</p>
-          <p className="break-words" data-testid="pay-memo">
-            {link.m}
+      <div className="mt-8" data-testid="pay-amount">
+        {amountOnly === null ? (
+          <Skeleton className="h-14 w-60" />
+        ) : (
+          <p className="font-display text-6xl font-bold tabular-nums tracking-tight">
+            {amountOnly}
+            <span className="ml-2 text-3xl font-semibold text-muted">AUSD</span>
           </p>
-        </>
-      )}
+        )}
+      </div>
 
-      <p className="mt-6 text-sm text-zinc-700">Receiving address</p>
-      <p className="font-mono" title={link.to} data-testid="pay-to">
-        {shortAddress(link.to)}
-      </p>
+      <dl className="mt-8 divide-y divide-line border-y border-line">
+        {link.m !== "" && (
+          <div className="py-3">
+            <dt className="text-sm text-muted">Note</dt>
+            <dd className="mt-0.5 break-words text-lg" data-testid="pay-memo">
+              {link.m}
+            </dd>
+          </div>
+        )}
+        <div className="py-3">
+          <dt className="text-sm text-muted">Receiving address</dt>
+          <dd className="mt-0.5 break-all font-semibold" title={link.to} data-testid="pay-to">
+            {link.to}
+          </dd>
+          <dd className="mt-1 text-sm text-muted">
+            Check that this matches what {link.n} told you.{" "}
+            <a className="font-semibold text-brand underline" href={explorerAddressUrl(link.to)} target="_blank" rel="noreferrer">
+              View on explorer
+            </a>
+          </dd>
+        </div>
+        <div className="py-3 text-sm text-muted">
+          A small network fee, paid in testnet MON, applies when you send.
+        </div>
+      </dl>
 
       <section className="mt-8" aria-live="polite">
-        {phase.kind === "paid" ? (
-          <div className="rounded-lg border border-green-800 p-4" data-testid="pay-paid">
-            <p className="text-2xl font-semibold">Paid</p>
-            <p className="mt-1">
+        {paid ? (
+          <div className="rounded-3xl bg-palm-soft p-6 text-center" data-testid="pay-paid">
+            <span className="relative mx-auto flex h-20 w-20 items-center justify-center">
+              <span className="absolute inset-0 rounded-full bg-palm/25 animate-ring" aria-hidden="true" />
+              <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-palm text-white animate-coin-pop">
+                <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="m5 12.5 4.6 4.6L19 7.5"
+                    stroke="currentColor"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="24"
+                    strokeDashoffset="24"
+                    className="animate-draw"
+                  />
+                </svg>
+              </span>
+            </span>
+            <p className="mt-4 font-display text-4xl font-bold text-palm">Paid</p>
+            <p className="mt-1 text-lg">
               {amountText} sent to {link.n}.
             </p>
+            <p className="mt-3 text-muted">You can close this page. {link.n} will see the payment on their dashboard.</p>
             <a
-              className={linkClass}
+              className={`${linkClass} mt-2`}
               href={explorerTxUrl(phase.hash)}
               target="_blank"
               rel="noreferrer"
@@ -308,13 +360,15 @@ function PayInvoice({ link }: { link: PayLink }) {
         ) : (
           <>
             {check.action === "no_wallet" && (
-              <p role="alert" data-testid="pay-no-wallet">
-                Open this link in a browser with a crypto wallet, like MetaMask.
-              </p>
+              <div role="alert" className="rounded-2xl bg-brand-soft p-4" data-testid="pay-no-wallet">
+                <p className="text-lg font-semibold">
+                  Open this link in a browser with a crypto wallet, like MetaMask.
+                </p>
+              </div>
             )}
 
             {account !== null && check.action !== "no_wallet" && (
-              <p className="mb-3 text-sm text-zinc-700">
+              <p className="mb-3 text-sm text-muted">
                 Connected as {shortAddress(account)}
                 {balances.ausd !== null && decimals !== null
                   ? `. Your balance: ${formatAmount(balances.ausd, decimals)} AUSD.`
@@ -323,78 +377,73 @@ function PayInvoice({ link }: { link: PayLink }) {
             )}
 
             {activeButton && (
-              <button
-                type="button"
-                className={buttonClass}
+              <Button
+                className="w-full !min-h-14 text-lg"
                 disabled={activeButton.disabled}
                 onClick={() => onButtonClick(activeButton.kind)}
                 data-testid="pay-button"
               >
+                {activeButton.working && <Spinner />}
                 {activeButton.label}
-              </button>
+              </Button>
+            )}
+
+            {sending && (
+              <p role="status" className="mt-3 text-muted">
+                Waiting for confirmation. This takes a few seconds. Keep this page open.
+              </p>
             )}
 
             {check.lowMon && check.action !== "no_wallet" && (
               <p className="mt-3 text-sm">
                 You need a little testnet MON to send a payment.{" "}
-                <a className="underline" href={config.monFaucetUrl} target="_blank" rel="noreferrer">
+                <a className="font-semibold text-brand underline" href={config.monFaucetUrl} target="_blank" rel="noreferrer">
                   Get testnet MON
                 </a>
               </p>
             )}
 
             {balances.failed && (
-              <p role="status" className="mt-3 text-sm text-amber-900">
+              <p role="status" className="mt-3 text-sm font-medium text-amber-ink">
                 Network is busy, retrying...
               </p>
             )}
 
             {phase.kind === "failed" && (
-              <div role="alert" className="mt-3 text-sm text-red-800">
-                <p>{FAILURE_MESSAGE[phase.reason]}</p>
-                {phase.hash !== undefined && (
-                  <a
-                    className={linkClass}
-                    href={explorerTxUrl(phase.hash)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View transaction
-                  </a>
-                )}
+              <div role="alert" className="mt-3 flex items-start gap-2 text-base font-medium text-clay">
+                <AlertIcon className="mt-1 h-4 w-4 shrink-0" />
+                <div>
+                  <p>{FAILURE_MESSAGE[phase.reason]}</p>
+                  {phase.hash !== undefined && (
+                    <a className={linkClass} href={explorerTxUrl(phase.hash)} target="_blank" rel="noreferrer">
+                      View transaction
+                    </a>
+                  )}
+                </div>
               </div>
             )}
 
             {phase.kind === "unconfirmed" && (
-              <div role="alert" className="text-sm">
-                <p>
+              <div role="alert" className="rounded-2xl bg-amber-soft p-4 text-amber-ink">
+                <p className="font-semibold">
                   Your payment was sent but is not confirmed yet. Do not pay again. Check the
                   transaction, or tap Check again.
                 </p>
-                <a
-                  className={linkClass}
-                  href={explorerTxUrl(phase.hash)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a className={linkClass} href={explorerTxUrl(phase.hash)} target="_blank" rel="noreferrer">
                   View transaction
                 </a>
-                <button
-                  type="button"
-                  className={`${buttonClass} mt-2`}
-                  onClick={() => checkAgain(phase.hash)}
-                >
-                  Check again
-                </button>
+                <Button className="mt-2 w-full" onClick={() => checkAgain(phase.hash)}>
+                  <CheckIcon /> Check again
+                </Button>
               </div>
             )}
           </>
         )}
       </section>
 
-      <p className="mt-8 text-xs text-zinc-600" data-testid="pay-details">
+      <p className="mt-10 text-xs text-muted" data-testid="pay-details">
         Invoice {link.inv}, created at block {link.b}
       </p>
-    </main>
+    </>
   );
 }

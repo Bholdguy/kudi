@@ -1,9 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kudi",
+  title: "Kudi: get paid from anywhere",
   description: "Get paid from anywhere, in real dollars, with your face.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#232d7a",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
