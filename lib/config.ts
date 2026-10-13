@@ -41,6 +41,9 @@ export const config = {
   linkVersion: "1",
   invoiceIdPrefix: "inv_",
   invoiceIdRandomLength: 6,
+  receiptPollMs: 500,
+  receiptTimeoutMs: 60_000,
+  monFaucetUrl: "https://faucet.monad.xyz",
 } as const;
 
 export function explorerAddressUrl(address: Address): string {

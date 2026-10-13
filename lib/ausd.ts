@@ -44,3 +44,8 @@ export async function readBalances(addresses: readonly Address[]): Promise<bigin
     ),
   );
 }
+
+/** Native (MON) balance in wei. A payer needs some to cover gas. */
+export async function readNativeBalance(address: Address): Promise<bigint> {
+  return publicClient.getBalance({ address });
+}

@@ -3,10 +3,10 @@
 Passkey-based freelancer invoicing: one passkey derives a receiving address per client; clients pay AUSD on Monad testnet. PRD.md is the single source of truth.
 
 ## Current phase
-Phases 0 to 3 done (passkey account; clients with live balances; invoices and pay links). Next: Phase 4, pay page (KUDI-10 to 13). Before Phase 7: create the public GitHub repo (bholdguy) and push. Every phase ends with a Vercel production deploy (`npx vercel deploy --prod --yes`).
+Phases 0 to 4 done (passkey account; clients; invoices; pay page). Next: Phase 5, live receipt (KUDI-14, 15). Before Phase 7: create the public GitHub repo (bholdguy) and push. Every phase ends with a Vercel production deploy (`npx vercel deploy --prod --yes`).
 
 ## Stack
-Next.js App Router, TypeScript, Tailwind, viem, `@category-labs/mera`, `@scure/bip32`, `@scure/bip39`, vitest. Later: wagmi (pay page only).
+Next.js App Router, TypeScript, Tailwind, viem, `@category-labs/mera`, `@scure/bip32`, `@scure/bip39`, vitest. No wagmi (see decisions log).
 
 ## Config rules
 - Addresses, chain ID, RPC URLs, explorer URL live only in `lib/config.ts` (env overrides: `NEXT_PUBLIC_RPC_URL`, `NEXT_PUBLIC_RPC_URL_FALLBACK`).
@@ -53,3 +53,8 @@ One phase at a time. Before coding a phase: interpretation, open questions, assu
 - 2026-10-13 Phase 3: stored invoices carry an extra `createdAt` (unix seconds) beyond the PRD schema, for KUDI-15's elapsed time. Invoice id is `inv_` + 6 chars from a look-alike-free 32-symbol alphabet. Amounts typed as digits with at most 2 decimals, 0.01 to 1,000,000 (limits in `lib/config.ts`).
 - Pay link = PRD format without `sig`, built by `lib/invoice.ts`; `parsePayLink` treats any invalid field as a broken link (E14). `/pay` exists now as a read-only decoder (no wallet or pay button); Phase 4 builds on it.
 - A new invoice records the live block number; if the read fails, no invoice is created. Invoice creation needs a display name and at least one client.
+- 2026-10-13 Phase 4: DEVIATION FROM THE PRD STACK (owner decision, for time and risk): no wagmi and no react-query. The pay page uses viem only: `window.ethereum` with `createWalletClient(custom(provider))`, `requestAddresses`, `switchChain`, and `addChain` when the wallet reports 4902. Code is in `lib/wallet.ts`.
+- Wallet errors are matched by code (4001 rejected, 4902 unknown chain, -32002 request pending) by walking the `cause` chain and `data.originalError`, never by message text. A payment that was sent but not yet confirmed offers only "Check again" (no retry), so a payer cannot pay twice by mistake.
+- Gas: viem's `estimateContractGas` with no padding (NFR-09). Read-only check: 72,930 gas for a 50 AUSD transfer, about 0.0074 MON at 102 gwei. The page was seen to send exactly that figure.
+- Fallback RPC is now set: `NEXT_PUBLIC_RPC_URL_FALLBACK=https://rpc-testnet.monadinfra.com` (Monad Foundation, 20 rps per the Monad docs) on Vercel production and in `.env.example`. Official MON faucet: https://faucet.monad.xyz.
+- The agent never sends or confirms a payment. Real payments are made by the owner from MetaMask. Wallet-less UI states were checked with a throwaway test provider that rejects every send; it is not part of the shipped code.
