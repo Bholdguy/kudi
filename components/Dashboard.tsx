@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import AccountSection from "@/components/AccountSection";
+import ActivitySection from "@/components/ActivitySection";
 import { Logo } from "@/components/BrandMark";
 import ClientsSection from "@/components/ClientsSection";
 import InvoicesSection from "@/components/InvoicesSection";
@@ -45,6 +46,7 @@ function SignedInView({ state, onSignOut }: { state: StoredState; onSignOut: () 
         />
         <InvoicesSection state={state} />
         <ClientsSection state={state} rows={rows} balanceState={balanceState} />
+        {rows.length > 0 && <ActivitySection state={state} />}
         {state.displayName !== "" && <AccountSection state={state} />}
       </main>
     </div>

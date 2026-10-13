@@ -310,17 +310,17 @@ function PayInvoice({ link }: { link: PayLink }) {
           <dd className="mt-0.5 break-all font-semibold" title={link.to} data-testid="pay-to">
             {link.to}
           </dd>
-          <dd className="mt-1 text-sm text-muted">
-            Check that this matches what {link.n} told you.{" "}
-            <a className="font-semibold text-brand underline" href={explorerAddressUrl(link.to)} target="_blank" rel="noreferrer">
+          <dd className="mt-1 text-sm text-muted">Check that this matches what {link.n} told you.</dd>
+          <dd>
+            <a className={linkClass} href={explorerAddressUrl(link.to)} target="_blank" rel="noreferrer">
               View on explorer
             </a>
           </dd>
         </div>
-        <div className="py-3 text-sm text-muted">
-          A small network fee, paid in testnet MON, applies when you send.
-        </div>
       </dl>
+      <p className="mt-3 text-sm text-muted">
+        A small network fee, paid in testnet MON, applies when you send.
+      </p>
 
       <section className="mt-8" aria-live="polite">
         {paid ? (
@@ -395,12 +395,12 @@ function PayInvoice({ link }: { link: PayLink }) {
             )}
 
             {check.lowMon && check.action !== "no_wallet" && (
-              <p className="mt-3 text-sm">
-                You need a little testnet MON to send a payment.{" "}
-                <a className="font-semibold text-brand underline" href={config.monFaucetUrl} target="_blank" rel="noreferrer">
+              <div className="mt-3 text-sm">
+                <p>You need a little testnet MON to send a payment.</p>
+                <a className={linkClass} href={config.monFaucetUrl} target="_blank" rel="noreferrer">
                   Get testnet MON
                 </a>
-              </p>
+              </div>
             )}
 
             {balances.failed && (

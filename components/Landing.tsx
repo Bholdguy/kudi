@@ -172,10 +172,18 @@ export default function Landing() {
   async function run(action: PasskeyAction) {
     setBusy(action);
     setError(null);
+    // The passkey code is imported up front on purpose: iOS Safari only shows the passkey prompt
+    // straight after a tap, so nothing may be awaited between the tap and the prompt.
     try {
       const account =
         action === "signUp" ? await createAccount() : await signInWithPasskey(stored);
-      saveState(mergeAccount(account, loadState()));
+      const merged = mergeAccount(account, loadState());
+      // E16: signing in with no saved clients (cleared storage, new device) rebuilds them from the chain.
+      if (action === "signIn" && merged.clients.length === 0) {
+        const { recoverClients } = await import("@/lib/recovery");
+        merged.clients = await recoverClients(merged.accountXpub, Math.floor(Date.now() / 1000));
+      }
+      saveState(merged);
       setSignedIn(true);
       router.push("/app");
     } catch (e) {
