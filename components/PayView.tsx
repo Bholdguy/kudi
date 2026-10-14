@@ -6,11 +6,13 @@ import type { Address, Hash } from "viem";
 import { Logo } from "@/components/BrandMark";
 import { AlertIcon, Button, CheckIcon, Skeleton, Spinner } from "@/components/ui";
 import { formatAmount } from "@/lib/amount";
+import NetworkBadge from "@/components/NetworkBadge";
+import { NETWORKS } from "@/lib/chains";
 import { config, explorerAddressUrl, explorerTxUrl } from "@/lib/config";
 import { shortAddress } from "@/lib/format";
 import { parsePayLink, type PayLink } from "@/lib/invoice";
 import { checkPayment } from "@/lib/payment";
-import { useDecimals } from "@/lib/useDecimals";
+import { useTokenDecimals } from "@/lib/useTokenDecimals";
 import { useWalletBalances } from "@/lib/useWalletBalances";
 import {
   connectWallet,
@@ -96,7 +98,8 @@ export default function PayView() {
 }
 
 function PayInvoice({ link }: { link: PayLink }) {
-  const decimals = useDecimals();
+  const decimals = useTokenDecimals(link.network);
+  const arcLocked = link.network === "arc";
   const provider = useSyncExternalStore(subscribeProvider, getProvider, () => null);
   const [account, setAccount] = useState<Address | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
@@ -139,7 +142,7 @@ function PayInvoice({ link }: { link: PayLink }) {
   });
 
   const amountOnly = decimals === null ? null : formatAmount(link.amt, decimals);
-  const amountText = amountOnly === null ? null : `${amountOnly} AUSD`;
+  const amountText = amountOnly === null ? null : `${amountOnly} ${NETWORKS[link.network].token.symbol}`;
 
   async function runExclusive(task: () => Promise<void>) {
     if (busy.current) return;
@@ -289,6 +292,9 @@ function PayInvoice({ link }: { link: PayLink }) {
           For {link.c}
         </p>
       )}
+      <div className="mt-4">
+        <NetworkBadge network={link.network} />
+      </div>
 
       <div className="mt-8" data-testid="pay-amount">
         {amountOnly === null ? (
@@ -296,7 +302,7 @@ function PayInvoice({ link }: { link: PayLink }) {
         ) : (
           <p className="font-display text-6xl font-bold tabular-nums tracking-tight">
             {amountOnly}
-            <span className="ml-2 text-3xl font-semibold text-muted">AUSD</span>
+            <span className="ml-2 text-3xl font-semibold text-muted">{NETWORKS[link.network].token.symbol}</span>
           </p>
         )}
       </div>
@@ -317,20 +323,27 @@ function PayInvoice({ link }: { link: PayLink }) {
           </dd>
           <dd className="mt-1 text-sm text-muted">Check that this matches what {link.n} told you.</dd>
           <dd>
-            <a className={linkClass} href={explorerAddressUrl(link.to)} target="_blank" rel="noreferrer">
+            <a className={linkClass} href={explorerAddressUrl(link.to, link.network)} target="_blank" rel="noreferrer">
               View on explorer
             </a>
           </dd>
         </div>
       </dl>
-      <p className="mt-3 text-sm text-muted">
-        A small network fee, paid in testnet MON, applies when you send.
-      </p>
+      {!arcLocked && (
+        <p className="mt-3 text-sm text-muted">
+          A small network fee, paid in testnet MON, applies when you send.
+        </p>
+      )}
         </div>
       </div>
 
       <section className="mt-8" aria-live="polite">
-        {paid ? (
+        {arcLocked ? (
+          <div className="rounded-2xl bg-amber-soft p-4 text-amber-ink" role="status" data-testid="pay-arc-locked">
+            <p className="font-semibold">Paying with Arc USDC is not available yet.</p>
+            <p className="mt-1 text-sm">Nothing has been charged. Ask {link.n} for an update.</p>
+          </div>
+        ) : paid ? (
           <div className="rounded-3xl bg-palm-soft p-6 text-center" data-testid="pay-paid">
             <span className="relative mx-auto flex h-20 w-20 items-center justify-center">
               <span className="absolute inset-0 rounded-full bg-palm/25 animate-ring" aria-hidden="true" />
@@ -356,7 +369,7 @@ function PayInvoice({ link }: { link: PayLink }) {
             <p className="mt-3 text-muted">You can close this page. {link.n} will see the payment on their dashboard.</p>
             <a
               className={`${linkClass} mt-2`}
-              href={explorerTxUrl(phase.hash)}
+              href={explorerTxUrl(phase.hash, link.network)}
               target="_blank"
               rel="noreferrer"
               data-testid="pay-tx-link"

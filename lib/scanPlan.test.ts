@@ -17,6 +17,8 @@ function invoiceAt(id: string, createdBlock: number): StoredInvoice {
     memo: "",
     createdBlock,
     createdAt: 0,
+    network: "monad",
+    salt: null,
     status: "unpaid",
     paidTx: null,
     paidAmount: null,

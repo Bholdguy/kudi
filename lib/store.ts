@@ -1,4 +1,5 @@
 import { config } from "@/lib/config";
+import { parseNetwork, type NetworkKey } from "@/lib/chains";
 
 /** One incoming AUSD transfer to a client address, as found in the chain's logs. */
 export type StoredTransfer = {
@@ -27,6 +28,10 @@ export type StoredClient = {
 
 export type StoredInvoice = {
   id: string;
+  /** Which network the invoice is on. Invoices stored before networks existed are Monad. */
+  network: NetworkKey;
+  /** Random 32-byte salt for the on-chain KudiPay ID. Set for Arc invoices only. */
+  salt: string | null;
   clientIndex: number;
   amount: string;
   memo: string;
@@ -74,6 +79,8 @@ function parseState(value: unknown): StoredState | null {
     invoices: Array.isArray(value.invoices)
       ? (value.invoices as StoredInvoice[]).map((invoice) => ({
           ...invoice,
+          network: parseNetwork(typeof invoice.network === "string" ? invoice.network : null),
+          salt: typeof invoice.salt === "string" ? invoice.salt : null,
           paidAt: typeof invoice.paidAt === "number" ? invoice.paidAt : null,
         }))
       : [],

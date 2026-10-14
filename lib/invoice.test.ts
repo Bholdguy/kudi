@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { formatAmount, parseAmount } from "@/lib/amount";
-import { buildInvoice, buildPayLink, generateInvoiceId, parsePayLink, type PayLink } from "@/lib/invoice";
+import {
+  buildInvoice,
+  buildPayLink,
+  generateInvoiceId,
+  generateSalt,
+  isMonadInvoice,
+  parsePayLink,
+  type PayLink,
+} from "@/lib/invoice";
 
 const TO = "0xA586108FeA48130F1e9FAa634Dace29867629A39";
 const ORIGIN = "https://kudi-bholdguy.vercel.app";
@@ -13,6 +21,8 @@ const base: PayLink = {
   c: "Acme GmbH",
   m: "October design work",
   b: 123456,
+  network: "monad",
+  salt: null,
 };
 
 function queryOf(link: string): URLSearchParams {
@@ -61,6 +71,8 @@ describe("KUDI-07 invoice building", () => {
       memo: "October design work",
       createdBlock: 123456,
       nowSeconds: 1_760_300_000,
+      network: "monad",
+      salt: null,
     });
     expect(invoice).toMatchObject({
       clientIndex: 1,
@@ -155,5 +167,68 @@ describe("KUDI-10 / E14 broken links", () => {
 
   it("rejects an empty query", () => {
     expect(parsePayLink("").ok).toBe(false);
+  });
+});
+
+describe("Arc networks: chain and salt on pay links", () => {
+  const ARC_SALT = "0x" + "ab".repeat(32);
+  const arc: PayLink = { ...base, network: "arc", salt: ARC_SALT };
+
+  it("writes chain=monad for Monad links and chain=arc with the salt for Arc links", () => {
+    expect(queryOf(buildPayLink(ORIGIN, base)).get("chain")).toBe("monad");
+    const params = queryOf(buildPayLink(ORIGIN, arc));
+    expect(params.get("chain")).toBe("arc");
+    expect(params.get("s")).toBe(ARC_SALT);
+  });
+
+  it("round-trips an Arc link with its salt", () => {
+    expect(parsePayLink(queryOf(buildPayLink(ORIGIN, arc)))).toEqual({ ok: true, link: arc });
+  });
+
+  it("an old Monad link with no chain param still parses as Monad", () => {
+    const params = queryOf(buildPayLink(ORIGIN, base));
+    params.delete("chain");
+    expect(parsePayLink(params)).toEqual({ ok: true, link: base });
+  });
+
+  it("an unknown chain value falls back to Monad", () => {
+    const params = queryOf(buildPayLink(ORIGIN, base));
+    params.set("chain", "base");
+    expect(parsePayLink(params)).toEqual({ ok: true, link: base });
+  });
+
+  it("rejects an Arc link without a well-formed 32-byte salt", () => {
+    const withSalt = (value: string | null) => {
+      const params = queryOf(buildPayLink(ORIGIN, arc));
+      if (value === null) params.delete("s");
+      else params.set("s", value);
+      return parsePayLink(params).ok;
+    };
+    expect(withSalt(null)).toBe(false);
+    expect(withSalt("0x1234")).toBe(false);
+    expect(withSalt("ab".repeat(32))).toBe(false);
+    expect(withSalt("0x" + "zz".repeat(32))).toBe(false);
+    expect(withSalt(ARC_SALT)).toBe(true);
+  });
+
+  it("generates 32-byte salts that differ", () => {
+    const salts = new Set(Array.from({ length: 20 }, generateSalt));
+    expect(salts.size).toBe(20);
+    for (const salt of salts) expect(salt).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  it("only Monad invoices are matched against AUSD transfers", () => {
+    const invoice = buildInvoice({
+      id: "inv_abc234",
+      client: { index: 1, name: "Acme", address: TO, createdAt: 1 },
+      amount: 10_000n,
+      memo: "",
+      createdBlock: 1,
+      nowSeconds: 1,
+      network: "arc",
+      salt: ARC_SALT,
+    });
+    expect(isMonadInvoice(invoice)).toBe(false);
+    expect(isMonadInvoice({ ...invoice, network: "monad", salt: null })).toBe(true);
   });
 });

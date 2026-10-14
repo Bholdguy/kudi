@@ -14,16 +14,23 @@ import {
   inputClass,
 } from "@/components/ui";
 import { formatAmount, parseAmount, type ParsedAmount } from "@/lib/amount";
-import { getDecimals, peekDecimals, readBlockNumber } from "@/lib/ausd";
+import NetworkBadge from "@/components/NetworkBadge";
+import { getTokenDecimals, peekTokenDecimals, readBlockNumberOn } from "@/lib/chainReads";
+import { DEFAULT_NETWORK, NETWORKS, type NetworkKey } from "@/lib/chains";
 import { clientAddress } from "@/lib/clients";
 import { config, explorerTxUrl } from "@/lib/config";
-import { buildInvoice, buildPayLink, generateInvoiceId } from "@/lib/invoice";
+import {
+  buildInvoice,
+  buildPayLink,
+  generateInvoiceId,
+  generateSalt,
+} from "@/lib/invoice";
 import { resetScanMark } from "@/lib/receipts";
 import { extraAmount } from "@/lib/reconcile";
 import { rewindThrough } from "@/lib/scanPlan";
 import { loadState, saveState, type StoredInvoice, type StoredState } from "@/lib/store";
 import { NEW_INVOICE_EVENT } from "@/lib/events";
-import { useDecimals } from "@/lib/useDecimals";
+import { useTokenDecimals } from "@/lib/useTokenDecimals";
 import { usePaymentWatcher } from "@/lib/usePaymentWatcher";
 
 const NETWORK_ERROR = "Network is busy. Nothing was created. Try again.";
@@ -72,6 +79,7 @@ function ShareButton({ url, title }: { url: string; title: string }) {
 
 export default function InvoicesSection({ state }: { state: StoredState }) {
   const [clientIndex, setClientIndex] = useState("");
+  const [networkInput, setNetworkInput] = useState<NetworkKey>(DEFAULT_NETWORK);
   const [amountInput, setAmountInput] = useState("");
   const [memoInput, setMemoInput] = useState("");
   const [clientError, setClientError] = useState<string | null>(null);
@@ -82,7 +90,10 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
   const [open, setOpen] = useState(state.invoices.length === 0);
   const clientRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
-  const decimals = useDecimals();
+  const monadDecimals = useTokenDecimals("monad");
+  const arcDecimals = useTokenDecimals("arc");
+  const decimals = monadDecimals;
+  const decimalsFor = (network: NetworkKey) => (network === "arc" ? arcDecimals : monadDecimals);
   const watcher = usePaymentWatcher();
 
   const clientsByIndex = useMemo(
@@ -116,18 +127,24 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
   const hasName = state.displayName !== "";
   const canCreate = hasName && state.clients.length > 0;
 
-  function linkFor(invoice: StoredInvoice): string | null {
-    const entry = clientsByIndex.get(invoice.clientIndex);
-    if (!entry) return null;
+  function payLinkFor(invoice: StoredInvoice, to: string, clientName: string): string {
     return buildPayLink(window.location.origin, {
-      to: entry.address as `0x${string}`,
+      to: to as `0x${string}`,
       amt: BigInt(invoice.amount),
       inv: invoice.id,
       n: state.displayName,
-      c: entry.client.name,
+      c: clientName,
       m: invoice.memo,
       b: invoice.createdBlock,
+      network: invoice.network,
+      salt: invoice.salt,
     });
+  }
+
+  function linkFor(invoice: StoredInvoice): string | null {
+    const entry = clientsByIndex.get(invoice.clientIndex);
+    if (!entry) return null;
+    return payLinkFor(invoice, entry.address, entry.client.name);
   }
 
   function checkAmount(text: string, knownDecimals: number | null): string | null {
@@ -147,7 +164,7 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
 
     let tokenDecimals: number;
     try {
-      tokenDecimals = await getDecimals();
+      tokenDecimals = await getTokenDecimals(networkInput);
     } catch {
       setFormError(NETWORK_ERROR);
       return;
@@ -167,7 +184,7 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
 
     setCreating(true);
     try {
-      const createdBlock = await readBlockNumber();
+      const createdBlock = await readBlockNumberOn(networkInput);
       const memo = memoInput.trim();
       const invoice = buildInvoice({
         id: generateInvoiceId(),
@@ -176,28 +193,26 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
         memo,
         createdBlock,
         nowSeconds: Math.floor(Date.now() / 1000),
+        network: networkInput,
+        salt: networkInput === "arc" ? generateSalt() : null,
       });
       const current = loadState() ?? state;
+      // Only Monad invoices are scanned for AUSD transfers, so only they move the scan mark back.
+      const monad = networkInput === "monad";
       // The new invoice's block must be scanned, so an already-scanned mark moves back before it.
-      const clients = current.clients.map((client) =>
-        client.index === selected.client.index && client.scan
-          ? { ...client, scan: { ...client.scan, through: rewindThrough(client.scan.through, createdBlock) } }
-          : client,
-      );
+      const clients = monad
+        ? current.clients.map((client) =>
+            client.index === selected.client.index && client.scan
+              ? { ...client, scan: { ...client.scan, through: rewindThrough(client.scan.through, createdBlock) } }
+              : client,
+          )
+        : current.clients;
       saveState({ ...current, clients, invoices: [...current.invoices, invoice] });
-      resetScanMark(selected.client.index);
+      if (monad) resetScanMark(selected.client.index);
       setCreated({
         invoiceId: invoice.id,
         clientName: selected.client.name,
-        link: buildPayLink(window.location.origin, {
-          to: selected.address as `0x${string}`,
-          amt: parsed.units,
-          inv: invoice.id,
-          n: state.displayName,
-          c: selected.client.name,
-          m: memo,
-          b: createdBlock,
-        }),
+        link: payLinkFor(invoice, selected.address, selected.client.name),
       });
       setAmountInput("");
       setMemoInput("");
@@ -254,9 +269,29 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
             )}
           </Field>
 
+          <Field id="invoice-network" label="Network" hint="Arc settles real USDC. Monad testnet uses test AUSD.">
+            {(fieldProps) => (
+              <select
+                {...fieldProps}
+                value={networkInput}
+                onChange={(e) => {
+                  setNetworkInput(e.target.value as NetworkKey);
+                  setAmountError(null);
+                }}
+                className={`${inputClass} border-line`}
+              >
+                {(["monad", "arc"] as const).map((key) => (
+                  <option key={key} value={key}>
+                    {NETWORKS[key].label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+
           <Field
             id="invoice-amount"
-            label="Amount in dollars (AUSD)"
+            label={`Amount in dollars (${NETWORKS[networkInput].token.symbol})`}
             hint="Up to 2 decimals, from 0.01 to 1,000,000."
             error={amountError}
           >
@@ -274,7 +309,7 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
                   if (amountError) setAmountError(null);
                 }}
                 onBlur={() => {
-                  if (amountInput.trim() !== "") setAmountError(checkAmount(amountInput, peekDecimals()));
+                  if (amountInput.trim() !== "") setAmountError(checkAmount(amountInput, peekTokenDecimals(networkInput)));
                 }}
                 className={`${inputClass} ${amountError ? "border-clay" : "border-line"}`}
               />
@@ -348,20 +383,25 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
             const entry = clientsByIndex.get(invoice.clientIndex);
             const link = linkFor(invoice);
             const extra = extraAmount(invoice);
+            const invoiceDecimals = decimalsFor(invoice.network);
+            const symbol = NETWORKS[invoice.network].token.symbol;
             return (
               <li key={invoice.id} className="py-4" data-testid={`invoice-${invoice.id}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="truncate text-lg font-semibold">{entry?.client.name ?? "Unknown client"}</p>
                     {invoice.memo !== "" && <p className="break-words text-muted">{invoice.memo}</p>}
+                    <div className="mt-2">
+                      <NetworkBadge network={invoice.network} />
+                    </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    {decimals === null ? (
+                    {invoiceDecimals === null ? (
                       <Skeleton className="ml-auto h-6 w-24" />
                     ) : (
                       <p className="font-display text-xl font-semibold tabular-nums">
-                        {formatAmount(BigInt(invoice.amount), decimals)}{" "}
-                        <span className="text-base text-muted">AUSD</span>
+                        {formatAmount(BigInt(invoice.amount), invoiceDecimals)}{" "}
+                        <span className="text-base text-muted">{symbol}</span>
                       </p>
                     )}
                     <div className="mt-1" data-testid="invoice-status">
@@ -370,15 +410,15 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
                   </div>
                 </div>
 
-                {invoice.status === "underpaid" && decimals !== null && invoice.paidAmount !== null && (
+                {invoice.status === "underpaid" && invoiceDecimals !== null && invoice.paidAmount !== null && (
                   <p className="mt-2 text-sm font-medium text-amber-ink" data-testid="invoice-received">
-                    Underpaid: received {formatAmount(BigInt(invoice.paidAmount), decimals)} of{" "}
-                    {formatAmount(BigInt(invoice.amount), decimals)} AUSD
+                    Underpaid: received {formatAmount(BigInt(invoice.paidAmount), invoiceDecimals)} of{" "}
+                    {formatAmount(BigInt(invoice.amount), invoiceDecimals)} {symbol}
                   </p>
                 )}
-                {decimals !== null && extra > 0n && (
+                {invoiceDecimals !== null && extra > 0n && (
                   <p className="mt-2 text-sm font-medium text-palm" data-testid="invoice-extra">
-                    +{formatAmount(extra, decimals)} AUSD extra
+                    +{formatAmount(extra, invoiceDecimals)} {symbol} extra
                   </p>
                 )}
 
@@ -392,7 +432,7 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
                   {invoice.paidTx !== null && (
                     <a
                       className={buttonClass("quiet")}
-                      href={explorerTxUrl(invoice.paidTx)}
+                      href={explorerTxUrl(invoice.paidTx, invoice.network)}
                       target="_blank"
                       rel="noreferrer"
                     >

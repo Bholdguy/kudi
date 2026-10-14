@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 import { readBlockNumber } from "@/lib/ausd";
 import { clientAddress } from "@/lib/clients";
+import { isMonadInvoice } from "@/lib/invoice";
 import { invoicesChanged, mergeTransfers, reconcileInvoices } from "@/lib/reconcile";
 import { fetchTimestamps, fetchTransfers } from "@/lib/scan";
 import { initialThrough, planScan, settledThrough } from "@/lib/scanPlan";
@@ -73,7 +74,10 @@ export async function scanPass(announce: boolean): Promise<ScanOutcome> {
   if (!start) return { reachedHead: true, moments: [] };
 
   const targets: Target[] = start.clients.flatMap((client) => {
-    const invoices = start.invoices.filter((invoice) => invoice.clientIndex === client.index);
+    // Arc invoices are paid in USDC on Arc, so only Monad invoices are matched against AUSD here.
+    const invoices = start.invoices.filter(
+      (invoice) => invoice.clientIndex === client.index && isMonadInvoice(invoice),
+    );
     if (invoices.length === 0) return [];
     return [
       {
@@ -131,7 +135,9 @@ export async function scanPass(announce: boolean): Promise<ScanOutcome> {
     const hit = found.find((entry) => entry.target.client.index === client.index);
     if (!hit) return client;
 
-    const clientInvoices = invoices.filter((invoice) => invoice.clientIndex === client.index);
+    const clientInvoices = invoices.filter(
+      (invoice) => invoice.clientIndex === client.index && isMonadInvoice(invoice),
+    );
     const cached = client.scan?.transfers ?? [];
     const merged = mergeTransfers(cached, hit.transfers);
     const settled = settledThrough(

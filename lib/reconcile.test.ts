@@ -12,6 +12,8 @@ function invoice(id: string, amountAusd: number, createdBlock: number, createdAt
     memo: "",
     createdBlock,
     createdAt,
+    network: "monad",
+    salt: null,
     status: "unpaid",
     paidTx: null,
     paidAmount: null,
