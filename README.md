@@ -26,12 +26,14 @@ Kudi is live on Arc mainnet with real USDC, alongside Monad testnet.
 
 **Contract.** [`0x9ff328491b91a25cfbf6eC9a9e6a6B148476b91F`](https://explorer.arc.io/address/0x9ff328491b91a25cfbf6eC9a9e6a6B148476b91F) on Arc mainnet (chain ID 5042), deployed in [tx `0x18a68407…`](https://explorer.arc.io/tx/0x18a68407b3c7dfc054c4addbd76a390049e2cdac2e8e9506e292400ec9a1a812). **Unverified:** the explorer's verification API blocks automated uploads (it returns a Cloudflare challenge), so the source is not verified on explorer.arc.io. The source is in [`contracts/KudiPay.sol`](contracts/KudiPay.sol).
 
-**Proof on mainnet.** Every `InvoicePaid` event the contract has emitted since deployment, and the freelancer's Send. All rows have status `success`. Times are UTC.
+**Proof on mainnet.** Every `InvoicePaid` event the contract has emitted since deployment (2 at the time of this scan), and every outgoing transfer from the freelancer's receiving address (2, matching its nonce). All rows have status `success`. Times are UTC.
 
 | What it shows | USDC | Block | Time (UTC) | Transaction |
 | --- | --- | --- | --- | --- |
 | Invoice paid through `KudiPay` (payer `0x87ceb46d…`, freelancer `0xf6a1bcdc…`) | 0.01 | 25955796 | 2026-10-14 17:12:51 | [`0x62c5b80bf1aad4d9affb63e2b386c70b89b873cc922404ad562fc1e9dff11ea2`](https://explorer.arc.io/tx/0x62c5b80bf1aad4d9affb63e2b386c70b89b873cc922404ad562fc1e9dff11ea2) |
 | Send from the freelancer's receiving address `0xf6a1bcdc…` to `0x87ceb46d…` | 0.005 | 25959754 | 2026-10-14 17:46:16 | [`0x7f67c256e3a60a6e4fb66c17b612a876027f455b6aaaec2fa6d34e75e1cf9583`](https://explorer.arc.io/tx/0x7f67c256e3a60a6e4fb66c17b612a876027f455b6aaaec2fa6d34e75e1cf9583) |
+| Invoice paid through `KudiPay` (payer `0x87ceb46d…`, freelancer `0xf6a1bcdc…`) | 0.02 | 25992459 | 2026-10-14 22:22:26 | [`0x50dc52e5f32ed326caffcc653602706a1ddb206133af5324d50d91808bf4a378`](https://explorer.arc.io/tx/0x50dc52e5f32ed326caffcc653602706a1ddb206133af5324d50d91808bf4a378) |
+| Send from the freelancer's receiving address `0xf6a1bcdc…` to `0x87ceb46d…` | 0.01 | 25992801 | 2026-10-14 22:25:19 | [`0x5f9de21828addbd9483c6615a8cee81b59f825601999a5e62359bb13c1c24492`](https://explorer.arc.io/tx/0x5f9de21828addbd9483c6615a8cee81b59f825601999a5e62359bb13c1c24492) |
 
 **Demo video:** [DEMO_VIDEO_URL]
 
