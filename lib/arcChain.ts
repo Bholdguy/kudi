@@ -71,3 +71,18 @@ export async function readArcMaxFee(): Promise<bigint | null> {
   const fees = await arcClient().estimateFeesPerGas();
   return fees.maxFeePerGas ?? null;
 }
+
+/** Gas for a plain native USDC transfer, estimated by the node. */
+export async function estimateArcTransferGas(args: { from: Address; to: Address; value: bigint }): Promise<bigint> {
+  return arcClient().estimateGas({ account: args.from, to: args.to, value: args.value });
+}
+
+/** The next nonce for an address, counting its pending transactions. */
+export async function readArcNonce(address: Address): Promise<number> {
+  return arcClient().getTransactionCount({ address, blockTag: "pending" });
+}
+
+/** Broadcasts a signed transaction and returns its hash. */
+export async function sendArcRawTransaction(serializedTransaction: Hex): Promise<Hash> {
+  return arcClient().sendRawTransaction({ serializedTransaction });
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import NameForm from "@/components/NameForm";
 import { Button, CheckIcon, Skeleton } from "@/components/ui";
 import { defaultNetwork } from "@/lib/assets";
@@ -24,6 +24,8 @@ export type NetworkFigures = {
 type SummaryProps = {
   state: StoredState;
   figures: Record<NetworkKey, NetworkFigures>;
+  /** Shown under the Arc tab only (the Send control). */
+  arcActions?: ReactNode;
 };
 
 function focusField(id: string) {
@@ -42,7 +44,7 @@ const STEP_LABELS = ["Add your name", "Add a client", "Create an invoice"];
 const NETWORK_TABS: readonly NetworkKey[] = ["monad", "arc"];
 
 /** Top of the dashboard: who you are, what you've received per network, what's next. */
-export default function Summary({ state, figures }: SummaryProps) {
+export default function Summary({ state, figures, arcActions }: SummaryProps) {
   const [network, setNetwork] = useState<NetworkKey>(() => defaultNetwork(state.invoices));
   const hasName = state.displayName !== "";
   const hasClients = state.clients.length > 0;
@@ -125,6 +127,7 @@ export default function Summary({ state, figures }: SummaryProps) {
               )}
             </p>
             {waitingLine && <p className="mt-2 text-lg">{waitingLine}</p>}
+            {network === "arc" && arcActions}
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import ActivitySection from "@/components/ActivitySection";
 import { Logo } from "@/components/BrandMark";
 import ClientsSection from "@/components/ClientsSection";
 import InvoicesSection from "@/components/InvoicesSection";
+import ArcSend from "@/components/ArcSend";
 import Summary, { type NetworkFigures } from "@/components/Summary";
 import { Button, Skeleton } from "@/components/ui";
 import { receivedFromPaidInvoices, sumKnown } from "@/lib/assets";
@@ -61,7 +62,21 @@ function SignedInView({ state, onSignOut }: { state: StoredState; onSignOut: () 
         </Button>
       </header>
       <main className="stagger mx-auto w-full max-w-2xl px-5 pb-20">
-        <Summary state={state} figures={figures} />
+        <Summary
+          state={state}
+          figures={figures}
+          arcActions={
+            <ArcSend
+              credential={{ credentialId: state.credentialId, transports: state.transports }}
+              rows={rows.map((row) => ({
+                index: row.client.index,
+                name: row.client.name,
+                address: row.address as `0x${string}`,
+                balance: arcState.balances[row.address] ?? null,
+              }))}
+            />
+          }
+        />
         <InvoicesSection state={state} />
         <ClientsSection state={state} rows={rows} balanceState={balanceState} />
         {rows.length > 0 && <ActivitySection state={state} />}

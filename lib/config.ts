@@ -39,6 +39,7 @@ export const config = {
   arcMaxFeeFloorGwei: 25,
   arcPriorityFeeGwei: 1,
   arcPollMs: 4000,
+  sendGasMarginPercent: 10,
 } as const;
 
 export function explorerAddressUrl(address: Address, network: NetworkKey = "monad"): string {

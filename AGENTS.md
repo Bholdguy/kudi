@@ -23,7 +23,7 @@ Next.js App Router, TypeScript, Tailwind, viem, `@category-labs/mera`, `@scure/b
 - Nothing loads from a third-party host: no external fonts, images or component libraries.
 
 ## Non-goals (original scope)
-- No withdrawals, sweeps or sends from the freelancer.
+- No automatic sweeps. Freelancer-initiated sends on Arc only, one passkey prompt per send, private keys never stored.
 - No fiat on/off-ramp.
 - No backend, database or server accounts.
 - No credit, subscriptions or recurring billing.
@@ -63,3 +63,4 @@ Next.js App Router, TypeScript, Tailwind, viem, `@category-labs/mera`, `@scure/b
 - Measured with Lighthouse (live, Moto G Power emulation, simulated 4G): pay page first paint 1.1 s; landing first paint 1.1, 1.3, 1.9, 2.3 and 3.9 s across five runs, so NFR-04 (under 1.5 s) is inconclusive on this network; accessibility 100 on both. A 375 px script audit of landing, dashboard, pay, 404 and the Paid screen found no horizontal overflow, no contrast failures and every button at least 44 px tall.
 - The agent never sends or confirms a payment; real payments were made by the owner from MetaMask. Wallet-less UI states were checked with throwaway page hooks that reject every send; they are not part of the shipped code.
 - checklist.design was audited through its public JSON (`/api/checklists/by-slug`) because its pages stay on "Loading…" in the in-app browser. Skipped on purpose: social sign-in, customer counts, testimonials, billing, notifications (non-goals, or would need fake data).
+- Sends were a non-goal until real USDC on Arc mainnet made an exit necessary: without Send, a freelancer who is paid real dollars has no way to move them out of Kudi. Scope is Arc only and freelancer-initiated only (no sweeps, no automation). Each send derives the child private key only after the user taps Confirm, uses it once, and wipes it in a finally block. Keys never sit in React state, storage, logs or errors. Monad has no Send.

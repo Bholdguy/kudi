@@ -65,6 +65,31 @@ export function accountFromPrfOutput(prfOutput: Uint8Array): AccountPublicData {
   }
 }
 
+/**
+ * The private key of receiving address `index`, from the passkey's PRF output.
+ * Only used to sign one send, after the user confirmed it. The seed and every
+ * intermediate key are wiped before returning. The caller owns the returned
+ * bytes and must zero them. (The mnemonic string cannot be zeroed in JS.)
+ */
+export function childPrivateKeyFromPrf(prfOutput: Uint8Array, index: number): Uint8Array {
+  const mnemonic = entropyToMnemonic(prfOutput, wordlist);
+  const seed = mnemonicToSeedSync(mnemonic);
+  const root = HDKey.fromMasterSeed(seed);
+  const account = root.derive(ACCOUNT_PATH);
+  const child = account.deriveChild(index);
+  try {
+    if (!child.privateKey) {
+      throw new Error("Private key derivation failed");
+    }
+    return new Uint8Array(child.privateKey);
+  } finally {
+    child.wipePrivateData();
+    account.wipePrivateData();
+    root.wipePrivateData();
+    seed.fill(0);
+  }
+}
+
 export async function createAccount(): Promise<PasskeyAccount> {
   const label = `${config.appName} account ${new Date().toLocaleDateString()}`;
   const created = await createPasskeyWithPrfOutput({
