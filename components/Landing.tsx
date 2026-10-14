@@ -55,11 +55,12 @@ const ANSWERS = [
   {
     question: "Does my client need crypto?",
     answer:
-      "Yes. They pay with a crypto app such as MetaMask, using AUSD. You don't need either to get started.",
+      "Yes. They pay with a crypto wallet such as MetaMask, in USDC on Arc or AUSD on Monad testnet. You don't need either to get started.",
   },
   {
     question: "Which network is this?",
-    answer: "Monad testnet, with Agora's AUSD dollar token. Moving to mainnet is a settings change.",
+    answer:
+      "Two. Arc mainnet for real USDC: payments settle in under a second, and fees are paid in USDC. Monad testnet with Agora's AUSD, if you want to try it free first.",
   },
 ];
 
@@ -215,7 +216,10 @@ export default function Landing() {
           />
           <div className="relative mx-auto grid w-full max-w-5xl gap-8 px-5 pb-14 pt-10 md:grid-cols-[1.3fr_1fr] md:items-center md:pt-16">
             <div className="stagger">
-              <h1 className="font-display text-[2.6rem] font-bold leading-[1.04] tracking-tight text-ink sm:text-6xl">
+              <p className="inline-flex items-center rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold text-brand">
+                Now live on Arc mainnet · real USDC
+              </p>
+              <h1 className="mt-4 font-display text-[2.6rem] font-bold leading-[1.04] tracking-tight text-ink sm:text-6xl">
                 Get paid from anywhere, in real dollars, with your face.
               </h1>
               <p className="mt-5 max-w-[36ch] text-lg text-muted">
@@ -281,7 +285,7 @@ export default function Landing() {
       </main>
 
       <footer className="mx-auto w-full max-w-5xl px-5 py-6 text-sm text-muted">
-        Kudi runs on Monad testnet with Agora&apos;s AUSD dollar token.
+        Kudi runs on Arc mainnet with real USDC, and on Monad testnet with Agora&apos;s AUSD.
       </footer>
     </div>
   );
