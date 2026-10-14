@@ -2,31 +2,40 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { Address, Hash } from "viem";
+import type { Address, Hash, Hex } from "viem";
 import { Logo } from "@/components/BrandMark";
 import { AlertIcon, Button, CheckIcon, Skeleton, Spinner } from "@/components/ui";
 import { formatAmount } from "@/lib/amount";
 import NetworkBadge from "@/components/NetworkBadge";
+import { arcCostCeiling, arcFees, arcNativeValue, arcRevertMessage, arcRevertName } from "@/lib/arcPay";
+import { estimateArcPayGas, readArcMaxFee, readArcNativeBalance } from "@/lib/arcChain";
 import { NETWORKS } from "@/lib/chains";
 import { config, explorerAddressUrl, explorerTxUrl } from "@/lib/config";
 import { shortAddress } from "@/lib/format";
 import { parsePayLink, type PayLink } from "@/lib/invoice";
 import { checkPayment } from "@/lib/payment";
+import { useArcBalance } from "@/lib/useArcBalance";
+import { useArcPaid } from "@/lib/useArcPaid";
 import { useTokenDecimals } from "@/lib/useTokenDecimals";
 import { useWalletBalances } from "@/lib/useWalletBalances";
 import {
   connectWallet,
-  ensureCorrectChain,
+  ensureChain,
   getConnectedAccount,
   getProvider,
   getWalletChainId,
   isRequestAlreadyPending,
   isUserRejection,
+  sendArcPayment,
   sendPayment,
+  waitForArcReceipt,
   waitForPayment,
+  type WalletProvider,
 } from "@/lib/wallet";
 
 type ButtonKind = "connect" | "switch" | "pay";
+
+type ButtonSpec = { label: string; disabled: boolean; kind: ButtonKind; working?: boolean };
 
 type FailureReason =
   | "connect_rejected"
@@ -34,6 +43,8 @@ type FailureReason =
   | "request_pending"
   | "rejected"
   | "reverted"
+  | "insufficient_usdc"
+  | "revert"
   | "other";
 
 type Phase =
@@ -41,10 +52,12 @@ type Phase =
   | { kind: "connecting" }
   | { kind: "switching" }
   | { kind: "sending" }
+  | { kind: "checking" }
+  | { kind: "signing" }
   | { kind: "confirming"; hash: Hash }
   | { kind: "unconfirmed"; hash: Hash }
   | { kind: "paid"; hash: Hash }
-  | { kind: "failed"; reason: FailureReason; hash?: Hash };
+  | { kind: "failed"; reason: FailureReason; hash?: Hash; message?: string };
 
 const FAILURE_MESSAGE: Record<FailureReason, string> = {
   connect_rejected: "Connection cancelled. Tap to try again.",
@@ -52,6 +65,8 @@ const FAILURE_MESSAGE: Record<FailureReason, string> = {
   request_pending: "Your wallet already has a request waiting. Open it to continue.",
   rejected: "Payment cancelled. Nothing was sent.",
   reverted: "Payment failed on-chain. Nothing was sent.",
+  insufficient_usdc: "Not enough USDC on Arc. Nothing was sent.",
+  revert: "Payment was not made. Nothing was sent.",
   other: "Something went wrong. Nothing was sent. Try again.",
 };
 
@@ -99,13 +114,16 @@ export default function PayView() {
 
 function PayInvoice({ link }: { link: PayLink }) {
   const decimals = useTokenDecimals(link.network);
-  const arcLocked = link.network === "arc";
+  const isArc = link.network === "arc";
+  const target = NETWORKS[link.network].chain;
   const provider = useSyncExternalStore(subscribeProvider, getProvider, () => null);
   const [account, setAccount] = useState<Address | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const busy = useRef(false);
   const balances = useWalletBalances(account);
+  const arcPaid = useArcPaid(link);
+  const arcBalance = useArcBalance(isArc ? account : null);
 
   useEffect(() => {
     if (provider === null) return;
@@ -143,6 +161,13 @@ function PayInvoice({ link }: { link: PayLink }) {
 
   const amountOnly = decimals === null ? null : formatAmount(link.amt, decimals);
   const amountText = amountOnly === null ? null : `${amountOnly} ${NETWORKS[link.network].token.symbol}`;
+  const balanceText = isArc
+    ? arcBalance === null
+      ? null
+      : `${formatAmount(arcBalance, 18)} USDC`
+    : balances.ausd !== null && decimals !== null
+      ? `${formatAmount(balances.ausd, decimals)} AUSD`
+      : null;
 
   async function runExclusive(task: () => Promise<void>) {
     if (busy.current) return;
@@ -157,7 +182,7 @@ function PayInvoice({ link }: { link: PayLink }) {
   async function switchNetwork() {
     if (provider === null) return;
     setPhase({ kind: "switching" });
-    await ensureCorrectChain(provider);
+    await ensureChain(provider, target);
     setChainId(await getWalletChainId(provider));
     setPhase({ kind: "idle" });
   }
@@ -181,7 +206,7 @@ function PayInvoice({ link }: { link: PayLink }) {
         setAccount(await connectWallet(provider));
         const id = await getWalletChainId(provider);
         setChainId(id);
-        if (id !== config.chain.id) await switchNetwork();
+        if (id !== target.id) await switchNetwork();
         else setPhase({ kind: "idle" });
       } catch (error) {
         setPhase(connectionFailure(error));
@@ -199,8 +224,62 @@ function PayInvoice({ link }: { link: PayLink }) {
     });
   }
 
+  async function payOnArc(walletProvider: WalletProvider, payer: Address) {
+    const value = arcNativeValue(link.amt);
+    const salt = link.salt as Hex;
+    setPhase({ kind: "checking" });
+
+    let gas: bigint;
+    let fees: ReturnType<typeof arcFees>;
+    try {
+      gas = await estimateArcPayGas({ freelancer: link.to, salt, value, account: payer });
+      fees = arcFees(await readArcMaxFee());
+      const balance = await readArcNativeBalance(payer);
+      if (balance < arcCostCeiling(value, gas, fees.maxFeePerGas)) {
+        setPhase({ kind: "failed", reason: "insufficient_usdc" });
+        return;
+      }
+    } catch (error) {
+      const name = arcRevertName(error);
+      setPhase(
+        name === null
+          ? { kind: "failed", reason: "other" }
+          : { kind: "failed", reason: "revert", message: arcRevertMessage(name) },
+      );
+      return;
+    }
+
+    setPhase({ kind: "signing" });
+    let hash: Hash | undefined;
+    try {
+      hash = await sendArcPayment({
+        provider: walletProvider,
+        account: payer,
+        freelancer: link.to,
+        salt,
+        value,
+        gas,
+        ...fees,
+      });
+      setPhase({ kind: "confirming", hash });
+      const result = await waitForArcReceipt(hash);
+      setPhase(
+        result === "success"
+          ? { kind: "paid", hash }
+          : { kind: "failed", reason: "revert", hash, message: "The payment reverted on-chain. Nothing was paid." },
+      );
+    } catch (error) {
+      if (hash !== undefined) setPhase({ kind: "unconfirmed", hash });
+      else setPhase({ kind: "failed", reason: isUserRejection(error) ? "rejected" : "other" });
+    }
+  }
+
   function pay() {
     if (provider === null || account === null) return;
+    if (isArc) {
+      void runExclusive(() => payOnArc(provider, account));
+      return;
+    }
     void runExclusive(async () => {
       setPhase({ kind: "sending" });
       let hash: Hash | undefined;
@@ -222,7 +301,7 @@ function PayInvoice({ link }: { link: PayLink }) {
     void runExclusive(async () => {
       setPhase({ kind: "confirming", hash });
       try {
-        const result = await waitForPayment(hash);
+        const result = await (isArc ? waitForArcReceipt : waitForPayment)(hash);
         setPhase(
           result === "success" ? { kind: "paid", hash } : { kind: "failed", reason: "reverted", hash },
         );
@@ -234,10 +313,32 @@ function PayInvoice({ link }: { link: PayLink }) {
 
   const sending = phase.kind === "sending" || phase.kind === "confirming";
   const retryLabel =
-    phase.kind === "failed" && ["rejected", "reverted", "other"].includes(phase.reason);
+    phase.kind === "failed" &&
+    ["rejected", "reverted", "other", "insufficient_usdc", "revert"].includes(phase.reason);
+  const paid = phase.kind === "paid" || (isArc && arcPaid.paid);
+  const paidHash: Hash | null = phase.kind === "paid" ? phase.hash : arcPaid.hash;
 
-  let button: { label: string; disabled: boolean; kind: ButtonKind; working?: boolean } | null = null;
-  if (phase.kind === "paid" || phase.kind === "unconfirmed" || check.action === "no_wallet") {
+  function arcButton(): ButtonSpec {
+    if (account === null) {
+      return {
+        label: amountText ? `Connect wallet to pay ${amountText}` : "Connect wallet to pay",
+        disabled: false,
+        kind: "connect",
+      };
+    }
+    if (chainId === null) return { label: "Checking network...", disabled: true, kind: "pay", working: true };
+    if (chainId !== target.id) return { label: `Switch to ${target.name}`, disabled: false, kind: "switch" };
+    if (arcBalance === null) return { label: "Checking balance...", disabled: true, kind: "pay", working: true };
+    if (arcBalance < arcNativeValue(link.amt)) return { label: "Not enough USDC on Arc", disabled: true, kind: "pay" };
+    return {
+      label: retryLabel ? "Try again" : amountText ? `Pay ${amountText}` : "Loading...",
+      disabled: decimals === null,
+      kind: "pay",
+    };
+  }
+
+  let button: ButtonSpec | null = null;
+  if (paid || phase.kind === "unconfirmed" || check.action === "no_wallet") {
     button = null;
   } else if (phase.kind === "connecting") {
     button = { label: "Connecting...", disabled: true, kind: "connect", working: true };
@@ -245,6 +346,12 @@ function PayInvoice({ link }: { link: PayLink }) {
     button = { label: "Switching network...", disabled: true, kind: "switch", working: true };
   } else if (sending) {
     button = { label: "Sending...", disabled: true, kind: "pay", working: true };
+  } else if (phase.kind === "checking") {
+    button = { label: "Checking balance...", disabled: true, kind: "pay", working: true };
+  } else if (phase.kind === "signing") {
+    button = { label: "Confirm in your wallet...", disabled: true, kind: "pay", working: true };
+  } else if (isArc) {
+    button = arcButton();
   } else if (check.action === "not_connected") {
     button = {
       label: amountText ? `Connect wallet to pay ${amountText}` : "Connect wallet to pay",
@@ -273,8 +380,6 @@ function PayInvoice({ link }: { link: PayLink }) {
     else if (kind === "switch") switchOnly();
     else pay();
   }
-
-  const paid = phase.kind === "paid";
 
   return (
     <div className="stagger">
@@ -329,7 +434,9 @@ function PayInvoice({ link }: { link: PayLink }) {
           </dd>
         </div>
       </dl>
-      {!arcLocked && (
+      {isArc ? (
+        <p className="mt-3 text-sm text-muted">A small network fee, paid in USDC, applies when you send.</p>
+      ) : (
         <p className="mt-3 text-sm text-muted">
           A small network fee, paid in testnet MON, applies when you send.
         </p>
@@ -338,12 +445,7 @@ function PayInvoice({ link }: { link: PayLink }) {
       </div>
 
       <section className="mt-8" aria-live="polite">
-        {arcLocked ? (
-          <div className="rounded-2xl bg-amber-soft p-4 text-amber-ink" role="status" data-testid="pay-arc-locked">
-            <p className="font-semibold">Paying with Arc USDC is not available yet.</p>
-            <p className="mt-1 text-sm">Nothing has been charged. Ask {link.n} for an update.</p>
-          </div>
-        ) : paid ? (
+        {paid ? (
           <div className="rounded-3xl bg-palm-soft p-6 text-center" data-testid="pay-paid">
             <span className="relative mx-auto flex h-20 w-20 items-center justify-center">
               <span className="absolute inset-0 rounded-full bg-palm/25 animate-ring" aria-hidden="true" />
@@ -367,15 +469,17 @@ function PayInvoice({ link }: { link: PayLink }) {
               {amountText} sent to {link.n}.
             </p>
             <p className="mt-3 text-muted">You can close this page. {link.n} will see the payment on their dashboard.</p>
-            <a
-              className={`${linkClass} mt-2`}
-              href={explorerTxUrl(phase.hash, link.network)}
-              target="_blank"
-              rel="noreferrer"
-              data-testid="pay-tx-link"
-            >
-              View transaction
-            </a>
+            {paidHash !== null && (
+              <a
+                className={`${linkClass} mt-2`}
+                href={explorerTxUrl(paidHash, link.network)}
+                target="_blank"
+                rel="noreferrer"
+                data-testid="pay-tx-link"
+              >
+                View transaction
+              </a>
+            )}
           </div>
         ) : (
           <>
@@ -390,9 +494,7 @@ function PayInvoice({ link }: { link: PayLink }) {
             {account !== null && check.action !== "no_wallet" && (
               <p className="mb-3 text-sm text-muted">
                 Connected as {shortAddress(account)}
-                {balances.ausd !== null && decimals !== null
-                  ? `. Your balance: ${formatAmount(balances.ausd, decimals)} AUSD.`
-                  : "."}
+                {balanceText !== null ? `. Your balance: ${balanceText}.` : "."}
               </p>
             )}
 
@@ -414,7 +516,7 @@ function PayInvoice({ link }: { link: PayLink }) {
               </p>
             )}
 
-            {check.lowMon && check.action !== "no_wallet" && (
+            {check.lowMon && !isArc && check.action !== "no_wallet" && (
               <div className="mt-3 text-sm">
                 <p>You need a little testnet MON to send a payment.</p>
                 <a className={linkClass} href={config.monFaucetUrl} target="_blank" rel="noreferrer">
@@ -423,7 +525,7 @@ function PayInvoice({ link }: { link: PayLink }) {
               </div>
             )}
 
-            {balances.failed && (
+            {balances.failed && !isArc && (
               <p role="status" className="mt-3 text-sm font-medium text-amber-ink">
                 Network is busy, retrying...
               </p>
@@ -433,9 +535,9 @@ function PayInvoice({ link }: { link: PayLink }) {
               <div role="alert" className="mt-3 flex items-start gap-2 text-base font-medium text-clay">
                 <AlertIcon className="mt-1 h-4 w-4 shrink-0" />
                 <div>
-                  <p>{FAILURE_MESSAGE[phase.reason]}</p>
+                  <p>{phase.message ?? FAILURE_MESSAGE[phase.reason]}</p>
                   {phase.hash !== undefined && (
-                    <a className={linkClass} href={explorerTxUrl(phase.hash)} target="_blank" rel="noreferrer">
+                    <a className={linkClass} href={explorerTxUrl(phase.hash, link.network)} target="_blank" rel="noreferrer">
                       View transaction
                     </a>
                   )}
@@ -449,7 +551,7 @@ function PayInvoice({ link }: { link: PayLink }) {
                   Your payment was sent but is not confirmed yet. Do not pay again. Check the
                   transaction, or tap Check again.
                 </p>
-                <a className={linkClass} href={explorerTxUrl(phase.hash)} target="_blank" rel="noreferrer">
+                <a className={linkClass} href={explorerTxUrl(phase.hash, link.network)} target="_blank" rel="noreferrer">
                   View transaction
                 </a>
                 <Button className="mt-2 w-full" onClick={() => checkAgain(phase.hash)}>

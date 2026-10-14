@@ -36,6 +36,9 @@ export const config = {
   recoveryProbeCount: 20,
   recentActivityLimit: 10,
   recoveryTimeoutMs: 4000,
+  arcMaxFeeFloorGwei: 25,
+  arcPriorityFeeGwei: 1,
+  arcPollMs: 4000,
 } as const;
 
 export function explorerAddressUrl(address: Address, network: NetworkKey = "monad"): string {

@@ -3,11 +3,15 @@ import {
   custom,
   erc20Abi,
   type Address,
+  type Chain,
   type EIP1193Provider,
   type Hash,
+  type Hex,
 } from "viem";
 import { config } from "@/lib/config";
-import { publicClient } from "@/lib/client";
+import { publicClient, publicClientFor } from "@/lib/client";
+import { KUDI_PAY_ABI } from "@/lib/arcPay";
+import { NETWORKS } from "@/lib/chains";
 
 const USER_REJECTED = 4001;
 const UNRECOGNIZED_CHAIN = 4902;
@@ -45,8 +49,8 @@ export const isUserRejection = (error: unknown): boolean => hasErrorCode(error, 
 export const isRequestAlreadyPending = (error: unknown): boolean =>
   hasErrorCode(error, REQUEST_ALREADY_PENDING);
 
-function walletClientFor(provider: WalletProvider) {
-  return createWalletClient({ chain: config.chain, transport: custom(provider) });
+function walletClientFor(provider: WalletProvider, chain: Chain = config.chain) {
+  return createWalletClient({ chain, transport: custom(provider) });
 }
 
 /** Accounts the wallet already shares with this site. No prompt is shown. */
@@ -67,16 +71,62 @@ export async function connectWallet(provider: WalletProvider): Promise<Address> 
   return account;
 }
 
-/** Switches to Monad testnet, adding the network first when the wallet doesn't know it (4902). */
-export async function ensureCorrectChain(provider: WalletProvider): Promise<void> {
-  const client = walletClientFor(provider);
+/** Switches the wallet to a chain, adding it first when the wallet doesn't know it (4902). */
+export async function ensureChain(provider: WalletProvider, chain: Chain): Promise<void> {
+  const client = walletClientFor(provider, chain);
   try {
-    await client.switchChain({ id: config.chain.id });
+    await client.switchChain({ id: chain.id });
   } catch (error) {
     if (!hasErrorCode(error, UNRECOGNIZED_CHAIN)) throw error;
-    await client.addChain({ chain: config.chain });
-    await client.switchChain({ id: config.chain.id });
+    await client.addChain({ chain });
+    await client.switchChain({ id: chain.id });
   }
+}
+
+/** Switches to Monad testnet, adding the network first when the wallet doesn't know it (4902). */
+export async function ensureCorrectChain(provider: WalletProvider): Promise<void> {
+  return ensureChain(provider, config.chain);
+}
+
+/**
+ * Sends KudiPay.pay with the native USDC value. The fees are set by the caller
+ * (the 25 gwei floor), and the gas limit is viem's estimate with no padding.
+ */
+export async function sendArcPayment(args: {
+  provider: WalletProvider;
+  account: Address;
+  freelancer: Address;
+  salt: Hex;
+  value: bigint;
+  gas: bigint;
+  maxFeePerGas: bigint;
+  maxPriorityFeePerGas: bigint;
+}): Promise<Hash> {
+  const { provider, account, freelancer, salt, value, gas, maxFeePerGas, maxPriorityFeePerGas } = args;
+  const arc = NETWORKS.arc;
+  if (arc.payMethod.kind !== "kudiPay") throw new Error("Arc pay method is not KudiPay");
+  return walletClientFor(provider, arc.chain).writeContract({
+    address: arc.payMethod.contract,
+    abi: KUDI_PAY_ABI,
+    functionName: "pay",
+    args: [freelancer, salt],
+    account,
+    chain: arc.chain,
+    value,
+    gas,
+    maxFeePerGas,
+    maxPriorityFeePerGas,
+  });
+}
+
+/** Waits for an Arc transaction. Throws if it is still unconfirmed after the configured timeout. */
+export async function waitForArcReceipt(hash: Hash): Promise<ReceiptResult> {
+  const receipt = await publicClientFor("arc").waitForTransactionReceipt({
+    hash,
+    pollingInterval: config.receiptPollMs,
+    timeout: config.receiptTimeoutMs,
+  });
+  return receipt.status === "success" ? "success" : "reverted";
 }
 
 /**

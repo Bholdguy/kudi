@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import type { NetworkKey } from "@/lib/chains";
 import { readBlockNumber } from "@/lib/ausd";
 import { clientAddress } from "@/lib/clients";
 import { isMonadInvoice } from "@/lib/invoice";
@@ -16,6 +17,8 @@ import {
 /** A payment that arrived while the dashboard was open. */
 export type PaidMoment = {
   invoiceId: string;
+  /** Which network the payment landed on. Monad when absent. */
+  network?: NetworkKey;
   clientName: string;
   /** Invoiced amount, base units. */
   amount: bigint;

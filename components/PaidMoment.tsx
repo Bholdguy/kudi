@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatAmount } from "@/lib/amount";
 import { explorerTxUrl } from "@/lib/config";
+import { NETWORKS } from "@/lib/chains";
 import { formatElapsed } from "@/lib/format";
 import type { PaidMoment as Moment } from "@/lib/receipts";
 
@@ -80,6 +81,8 @@ export default function PaidMoment({
   onDismiss: () => void;
 }) {
   const doneRef = useRef<HTMLButtonElement>(null);
+  const network = moment.network ?? "monad";
+  const symbol = NETWORKS[network].token.symbol;
   const finalAmount = formatAmount(moment.amount, decimals);
   const shownAmount = formatAmount(useCountUp(moment.amount), decimals);
 
@@ -130,15 +133,15 @@ export default function PaidMoment({
 
       <p id="paid-moment-title" className="mt-4 max-w-[22ch] break-words font-display text-3xl font-semibold leading-tight animate-rise sm:max-w-[30ch]">
         <span className="sr-only">
-          Paid by {moment.clientName}, {finalAmount} AUSD
+          Paid by {moment.clientName}, {finalAmount} {symbol}
         </span>
         <span aria-hidden="true" className="tabular-nums">
-          Paid by {moment.clientName}, {shownAmount} AUSD
+          Paid by {moment.clientName}, {shownAmount} {symbol}
         </span>
       </p>
 
       {moment.extra > 0n && (
-        <p className="mt-3 text-xl font-semibold text-coin">+{formatAmount(moment.extra, decimals)} AUSD extra</p>
+        <p className="mt-3 text-xl font-semibold text-coin">+{formatAmount(moment.extra, decimals)} {symbol} extra</p>
       )}
       {moment.elapsedSeconds !== null && (
         <p className="mt-3 text-lg text-white/85">
@@ -148,7 +151,7 @@ export default function PaidMoment({
 
       <a
         className="mt-6 inline-flex min-h-11 items-center text-lg font-semibold underline decoration-white/60 underline-offset-4"
-        href={explorerTxUrl(moment.tx)}
+        href={explorerTxUrl(moment.tx, network)}
         target="_blank"
         rel="noreferrer"
       >

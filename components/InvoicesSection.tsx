@@ -32,6 +32,7 @@ import { loadState, saveState, type StoredInvoice, type StoredState } from "@/li
 import { NEW_INVOICE_EVENT } from "@/lib/events";
 import { useTokenDecimals } from "@/lib/useTokenDecimals";
 import { usePaymentWatcher } from "@/lib/usePaymentWatcher";
+import { useArcPayments } from "@/lib/useArcPayments";
 
 const NETWORK_ERROR = "Network is busy. Nothing was created. Try again.";
 
@@ -95,6 +96,9 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
   const decimals = monadDecimals;
   const decimalsFor = (network: NetworkKey) => (network === "arc" ? arcDecimals : monadDecimals);
   const watcher = usePaymentWatcher();
+  const arcWatcher = useArcPayments();
+  const pendingMoment = watcher.moments[0] ?? arcWatcher.moments[0] ?? null;
+  const dismissMoment = watcher.moments.length > 0 ? watcher.dismissFirst : arcWatcher.dismissFirst;
 
   const clientsByIndex = useMemo(
     () =>
@@ -449,12 +453,12 @@ export default function InvoicesSection({ state }: { state: StoredState }) {
         </ul>
       )}
 
-      {watcher.moments.length > 0 && decimals !== null && (
+      {pendingMoment !== null && decimals !== null && (
         <PaidMoment
-          moment={watcher.moments[0]}
+          moment={pendingMoment}
           decimals={decimals}
           freelancerName={state.displayName}
-          onDismiss={watcher.dismissFirst}
+          onDismiss={dismissMoment}
         />
       )}
     </section>
