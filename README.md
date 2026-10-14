@@ -2,13 +2,42 @@
 
 **Get paid from anywhere, in real dollars, with your face.**
 
-Kudi lets a freelancer get paid in AUSD from any client with a crypto wallet. The freelancer signs up with a passkey (Face ID or Touch ID), and Kudi derives a separate receiving address for every client from that one passkey. The client opens a pay link, sends AUSD on Monad testnet, and the freelancer's screen flips to **Paid** with a real transaction hash.
+Kudi lets a freelancer get paid in dollars from any client with a crypto wallet. The freelancer signs up with a passkey (Face ID or Touch ID), and Kudi derives a separate receiving address for every client from that one passkey. The client opens a pay link and pays in USDC on Arc mainnet or in AUSD on Monad testnet. The freelancer's screen flips to **Paid** with a real transaction hash.
 
 - **Live app:** https://kudi-bholdguy.vercel.app (open it on iPhone Safari to sign up)
 - **Code:** https://github.com/Bholdguy/kudi
 - **Built for:** Monad Metropolis, Consumer Products & Payments track. Also aimed at the Agora cross-border payments bounty and both Mera bounties.
 
-Kudi is receive-only and has no backend. Everything the freelancer sees comes from the browser and the chain.
+Kudi has no backend. Everything the freelancer sees comes from the browser and the chain. Freelancers can also send USDC out of their Arc receiving addresses.
+
+## Kudi on Arc
+
+Kudi is live on Arc mainnet with real USDC, alongside Monad testnet.
+
+**Why Arc.** USDC is the gas token, so a client and a freelancer only ever hold dollars. Arc's sub-second finality means the **Paid** screen fires as soon as a payment lands. A client pays in one transaction through `KudiPay`, with no approve step.
+
+**How it works.**
+
+1. The invoice link carries a random 32-byte salt, alongside the freelancer's receiving address and the amount.
+2. The client pays `KudiPay.pay(freelancer, salt)` with the amount as native USDC. Arc's native USDC has 18 decimals, so the stored 6-decimal amount is scaled by 10^12.
+3. The contract derives `invoiceId = keccak256(abi.encode(freelancer, value, salt))`. An invoice can't be faked with a different amount, and once it is paid it can't be paid again. The contract forwards the funds to the freelancer and emits `InvoicePaid`.
+4. Kudi's Paid check reads `paid(invoiceId)` and the `InvoicePaid` log for the transaction hash.
+5. The freelancer sends USDC out with Face ID. A Mera passkey-derived key is derived for that one send, used to sign, and wiped. Nothing is stored.
+
+**Contract.** [`0x9ff328491b91a25cfbf6eC9a9e6a6B148476b91F`](https://explorer.arc.io/address/0x9ff328491b91a25cfbf6eC9a9e6a6B148476b91F) on Arc mainnet (chain ID 5042), deployed in [tx `0x18a68407…`](https://explorer.arc.io/tx/0x18a68407b3c7dfc054c4addbd76a390049e2cdac2e8e9506e292400ec9a1a812). **Unverified:** the explorer's verification API blocks automated uploads (it returns a Cloudflare challenge), so the source is not verified on explorer.arc.io. The source is in [`contracts/KudiPay.sol`](contracts/KudiPay.sol).
+
+**Proof on mainnet.** Every `InvoicePaid` event the contract has emitted since deployment, and the freelancer's Send. All rows have status `success`. Times are UTC.
+
+| What it shows | USDC | Block | Time (UTC) | Transaction |
+| --- | --- | --- | --- | --- |
+| Invoice paid through `KudiPay` (payer `0x87ceb46d…`, freelancer `0xf6a1bcdc…`) | 0.01 | 25955796 | 2026-10-14 17:12:51 | [`0x62c5b80bf1aad4d9affb63e2b386c70b89b873cc922404ad562fc1e9dff11ea2`](https://explorer.arc.io/tx/0x62c5b80bf1aad4d9affb63e2b386c70b89b873cc922404ad562fc1e9dff11ea2) |
+| Send from the freelancer's receiving address `0xf6a1bcdc…` to `0x87ceb46d…` | 0.005 | 25959754 | 2026-10-14 17:46:16 | [`0x7f67c256e3a60a6e4fb66c17b612a876027f455b6aaaec2fa6d34e75e1cf9583`](https://explorer.arc.io/tx/0x7f67c256e3a60a6e4fb66c17b612a876027f455b6aaaec2fa6d34e75e1cf9583) |
+
+**Demo video:** [DEMO_VIDEO_URL]
+
+**Live app:** https://kudi-bholdguy.vercel.app
+
+---
 
 ## The problem
 
@@ -26,6 +55,8 @@ Stablecoin rails fix the first. Passkeys fix the second. Kudi packages both for 
 3. **Watch it land.** The client pays from MetaMask. Your dashboard marks the invoice Paid within seconds, with a full-screen confirmation and the transaction link.
 
 ## Architecture
+
+The diagram shows the Monad testnet path. The Arc path adds `KudiPay` and native USDC balance reads, described in [Kudi on Arc](#kudi-on-arc).
 
 ```mermaid
 flowchart LR
@@ -71,7 +102,8 @@ The two payments each used a gas limit equal to the gas used (55,862), because K
 
 - **[Monad](https://monad.xyz) testnet:** the chain. Chain ID 10143, RPC `https://testnet-rpc.monad.xyz` with `https://rpc-testnet.monadinfra.com` as the fallback, Monadscan for receipts.
 - **[Mera](https://github.com/category-labs/mera) (`@category-labs/mera`):** passkey accounts through the WebAuthn PRF extension. Kudi uses `createPasskeyWithPrfOutput`, `getPasskeyPrfOutput` and `MeraError` codes, and adds its own BIP-44 derivation on top (Mera ships none).
-- **[Agora](https://docs.agora.finance/developer/contract-deployments) AUSD:** the dollar token. Testnet token `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC` and the testnet faucet `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C`. Kudi writes no smart contracts; it only calls the existing AUSD token.
+- **[Agora](https://docs.agora.finance/developer/contract-deployments) AUSD:** the dollar token. Testnet token `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC` and the testnet faucet `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C`. Kudi only calls the existing AUSD token on Monad testnet.
+- **Arc mainnet:** chain ID 5042, native USDC as gas, RPC `https://rpc.mainnet.arc.io`, explorer https://explorer.arc.io. Kudi's own contract is `KudiPay` (see [Kudi on Arc](#kudi-on-arc)), the only contract Kudi wrote.
 - **viem**, `@scure/bip32`, `@scure/bip39`, **Next.js** (App Router), **Tailwind CSS**, **Vitest**, and **Vercel** for hosting. Bricolage Grotesque is self-hosted through `@fontsource-variable/bricolage-grotesque`.
 
 ## Run it yourself
@@ -121,7 +153,7 @@ npm run build
 - The "browser without PRF" message (desktop Chrome with a local-profile passkey) is covered by unit tests but was not triggered on a real device.
 - Invoices and client names live in the browser's storage. Clearing it loses them; client addresses with a balance are rebuilt as "Client 1", "Client 2" and so on after sign-in.
 - The recent-payments list only covers clients that have at least one invoice.
-- Testnet only. Mainnet would be a configuration change, and it has not been tried.
+- Monad testnet is the free test network. Arc mainnet is live, but only the transactions in [Kudi on Arc](#kudi-on-arc) have been run on it.
 
 ## AI tools used
 
