@@ -12,6 +12,8 @@ export type NetworkEntry = {
   key: NetworkKey;
   /** Badge text shown to both freelancer and client. */
   label: string;
+  /** Short name for tabs, such as "Monad" or "Arc". */
+  shortName: string;
   chain: Chain;
   rpcUrls: readonly string[];
   explorerBaseUrl: string;
@@ -47,6 +49,7 @@ export const NETWORKS: Record<NetworkKey, NetworkEntry> = {
   monad: {
     key: "monad",
     label: "Monad testnet",
+    shortName: "Monad",
     chain: {
       ...monadTestnet,
       blockExplorers: {
@@ -64,6 +67,7 @@ export const NETWORKS: Record<NetworkKey, NetworkEntry> = {
   arc: {
     key: "arc",
     label: "Arc mainnet · real USDC",
+    shortName: "Arc",
     chain: arcChain,
     rpcUrls: [ARC_RPC_URL],
     explorerBaseUrl: ARC_EXPLORER_URL,

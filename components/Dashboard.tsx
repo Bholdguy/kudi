@@ -7,11 +7,15 @@ import ActivitySection from "@/components/ActivitySection";
 import { Logo } from "@/components/BrandMark";
 import ClientsSection from "@/components/ClientsSection";
 import InvoicesSection from "@/components/InvoicesSection";
-import Summary from "@/components/Summary";
+import Summary, { type NetworkFigures } from "@/components/Summary";
 import { Button, Skeleton } from "@/components/ui";
+import { receivedFromPaidInvoices, sumKnown } from "@/lib/assets";
+import { NETWORKS, type NetworkKey } from "@/lib/chains";
 import { clientAddress } from "@/lib/clients";
 import { setSignedIn, type StoredState } from "@/lib/store";
+import { useArcBalances } from "@/lib/useArcBalances";
 import { useBalances } from "@/lib/useBalances";
+import { useTokenDecimals } from "@/lib/useTokenDecimals";
 import { useHydrated, useSignedIn, useStoredState } from "@/lib/useStore";
 
 function SignedInView({ state, onSignOut }: { state: StoredState; onSignOut: () => void }) {
@@ -23,11 +27,30 @@ function SignedInView({ state, onSignOut }: { state: StoredState; onSignOut: () 
       })),
     [state.clients, state.accountXpub],
   );
-  const balanceState = useBalances(rows.map((row) => row.address));
+  const addresses = rows.map((row) => row.address);
+  const balanceState = useBalances(addresses);
+  const arcState = useArcBalances(addresses);
+  const arcDecimals = useTokenDecimals("arc");
   const { balances, decimals } = balanceState;
 
-  const known = rows.length > 0 && rows.every((row) => balances[row.address] !== undefined);
-  const total = known ? rows.reduce((sum, row) => sum + balances[row.address], 0n) : null;
+  // Live balances over the receiving addresses (the client addresses), per network.
+  const hasRows = rows.length > 0;
+  const figures: Record<NetworkKey, NetworkFigures> = {
+    monad: {
+      received: receivedFromPaidInvoices(state.invoices, "monad"),
+      receivedDecimals: decimals,
+      balance: hasRows ? sumKnown(addresses.map((address) => balances[address])) : null,
+      balanceDecimals: decimals,
+      balanceFailed: balanceState.failed,
+    },
+    arc: {
+      received: receivedFromPaidInvoices(state.invoices, "arc"),
+      receivedDecimals: arcDecimals,
+      balance: hasRows ? sumKnown(addresses.map((address) => arcState.balances[address])) : null,
+      balanceDecimals: NETWORKS.arc.chain.nativeCurrency.decimals,
+      balanceFailed: arcState.failed,
+    },
+  };
 
   return (
     <div className="min-h-dvh">
@@ -38,12 +61,7 @@ function SignedInView({ state, onSignOut }: { state: StoredState; onSignOut: () 
         </Button>
       </header>
       <main className="stagger mx-auto w-full max-w-2xl px-5 pb-20">
-        <Summary
-          state={state}
-          total={total}
-          decimals={decimals}
-          balancesFailed={balanceState.failed}
-        />
+        <Summary state={state} figures={figures} />
         <InvoicesSection state={state} />
         <ClientsSection state={state} rows={rows} balanceState={balanceState} />
         {rows.length > 0 && <ActivitySection state={state} />}
