@@ -35,7 +35,7 @@ Kudi is live on Arc mainnet with real USDC, alongside Monad testnet.
 | Invoice paid through `KudiPay` (payer `0x87ceb46d…`, freelancer `0xf6a1bcdc…`) | 0.02 | 25992459 | 2026-10-14 22:22:26 | [`0x50dc52e5f32ed326caffcc653602706a1ddb206133af5324d50d91808bf4a378`](https://explorer.arc.io/tx/0x50dc52e5f32ed326caffcc653602706a1ddb206133af5324d50d91808bf4a378) |
 | Send from the freelancer's receiving address `0xf6a1bcdc…` to `0x87ceb46d…` | 0.01 | 25992801 | 2026-10-14 22:25:19 | [`0x5f9de21828addbd9483c6615a8cee81b59f825601999a5e62359bb13c1c24492`](https://explorer.arc.io/tx/0x5f9de21828addbd9483c6615a8cee81b59f825601999a5e62359bb13c1c24492) |
 
-**Demo video:** [DEMO_VIDEO_URL]
+**Demo video:** <https://x.com/bholdguy/status/2110523817386807513>
 
 **Live app:** https://kudi-bholdguy.vercel.app
 
